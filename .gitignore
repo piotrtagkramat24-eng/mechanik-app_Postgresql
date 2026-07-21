@@ -1,0 +1,9 @@
+cat > .gitignore << 'EOF'
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+*.log
+EOF
