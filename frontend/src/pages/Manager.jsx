@@ -126,11 +126,43 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
 }
 
 const PO_NAPRAWIE_IKONY = { wyposazenie_inspecto: '📦', mycie: '🚿' };
+const PO_NAPRAWIE_ETYKIETY = { wyposazenie_inspecto: 'Wyposażenie i Inspecto', mycie: 'Mycie' };
+
+// Male znaczniki na karcie ZAKONCZONEGO zlecenia pokazujace, czy dalsze kroki
+// (Wyposazenie+Inspecto / Mycie) zostaly juz wykonane przez przypisanego
+// mechanika, czy jeszcze na niego czekaja. Renderuje sie tylko jesli dla
+// danego zlecenia w ogole powstaly takie zadania (nie kazde zlecenie je ma -
+// np. gdy zaden mechanik nie ma wlaczonej flagi WykonujeDodatkowePrace).
+function PoNaprawieStatusBadges({ jobId, statusPoNaprawiePerJob }) {
+  const status = statusPoNaprawiePerJob[jobId];
+  if (!status) return null;
+  const typy = Object.keys(status);
+  if (typy.length === 0) return null;
+  return (
+    <div className="kb-done-ponaprawie-status">
+      {typy.map(typ => (
+        <span
+          key={typ}
+          className={`kb-done-ponaprawie-badge ${status[typ].wykonano ? 'kb-done-ponaprawie-badge--ok' : 'kb-done-ponaprawie-badge--pending'}`}
+          title={PO_NAPRAWIE_ETYKIETY[typ] || typ}
+        >
+          {PO_NAPRAWIE_IKONY[typ] || '🔔'} {PO_NAPRAWIE_ETYKIETY[typ] || typ}: {status[typ].wykonano ? '✓ wykonane' : '⏳ czeka na mechanika'}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // Karta zadania "po naprawie" (Wyposazenie+Inspecto / Mycie) - wyswietlana w
 // kolumnie mechanika na tablicy Kanban jak prawdziwe zadanie do wykonania,
 // a nie tylko jako ikona w naglowku kolumny.
-function PoNaprawieCard({ zadanie, onWykonaj }) {
+//
+// Uwaga: to jest widok KIEROWNIKA/SZEFA na tablicy mechanikow - tu pokazujemy
+// TYLKO informacje, ze zadanie czeka na wykonanie (bez przycisku akcji).
+// Oznaczenie zadania jako wykonane moze zrobic wylacznie sam mechanik, ze
+// swojego panelu "Do wykonania po naprawie" (patrz FollowUpPanel.jsx) - stad
+// brak tu jakiegokolwiek przycisku/onClick.
+function PoNaprawieCard({ zadanie }) {
   return (
     <div className={`kb-card kb-card--ponaprawie kb-card--ponaprawie-${zadanie.Typ}`}>
       <div className="kb-card-body">
@@ -141,18 +173,16 @@ function PoNaprawieCard({ zadanie, onWykonaj }) {
         </div>
         <div className="kb-card-opis">{zadanie.Marka} {zadanie.Model}{zadanie.Opis ? ` — ${zadanie.Opis}` : ''}</div>
         <div className="kb-card-footer">
-          {onWykonaj && (
-            <button className="btn btn-success btn-small" onClick={() => onWykonaj(zadanie.Id)}>
-              ✓ Wykonane
-            </button>
-          )}
+          <span className="kb-card-ponaprawie-status" title="Może oznaczyć jako wykonane wyłącznie przypisany mechanik">
+            ⏳ Czeka na wykonanie przez mechanika
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], onWykonajPoNaprawie, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete }) {
+function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -243,10 +273,13 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], on
         </div>
       </div>
 
-      {poNaprawie.length > 0 && (
+      {/* Zadania po naprawie sa ZAWSZE niewykonane (backend zwraca tylko
+          Wykonano=0 - patrz GET /followup/wszystkie), wiec nie maja czego
+          szukac w zakladce "Zakonczone" - pokazujemy je tylko poza nia. */}
+      {filterMode !== 'zakonczone' && poNaprawie.length > 0 && (
         <div className="kb-column-ponaprawie">
           {poNaprawie.map(z => (
-            <PoNaprawieCard key={`pn-${z.Id}`} zadanie={z} onWykonaj={onWykonajPoNaprawie} />
+            <PoNaprawieCard key={`pn-${z.Id}`} zadanie={z} />
           ))}
         </div>
       )}
@@ -315,6 +348,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], on
                         </div>
                         <div className="kb-card-opis kb-card-opis--done">{job.Opis}</div>
                         <ElapsedTimeBar job={job} />
+                        <PoNaprawieStatusBadges jobId={job.Id} statusPoNaprawiePerJob={statusPoNaprawiePerJob} />
                         {job.OpisWykonania && (
                           <div className="kb-card-wykonanie">
                             <span className="kb-card-wykonanie-label">📝 Do zgłoszenia:</span> {job.OpisWykonania}
@@ -359,6 +393,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], on
                 </div>
                 <div className="kb-card-opis kb-card-opis--done">{job.Opis}</div>
                 <ElapsedTimeBar job={job} />
+                <PoNaprawieStatusBadges jobId={job.Id} statusPoNaprawiePerJob={statusPoNaprawiePerJob} />
                 {job.OpisWykonania && (
                   <div className="kb-card-wykonanie">
                     <span className="kb-card-wykonanie-label">📝 Do zgłoszenia:</span> {job.OpisWykonania}
@@ -430,10 +465,21 @@ export default function Manager({
   const [mechanicy, setMechanicy] = useState([]);
   const [predefiniowane, setPredefiniowane] = useState([]);
   const [zadaniaPoNaprawie, setZadaniaPoNaprawie] = useState([]);
+  const [statusZadanPoNaprawie, setStatusZadanPoNaprawie] = useState([]);
   const [wybor, setWybor] = useState({});
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('nowe');
   const [kanbanFilter, setKanbanFilter] = useState('wszystkie');
+  // Sortowanie/filtrowanie zakonczonych zlecen na Tablicy mechanikow (patrz
+  // getJobsForMechanik nizej) - domyslnie sortujemy wg daty DODANIA, malejaco
+  // (najnowsze na gorze). Mozna przelaczyc pole (data dodania / rozpoczecia /
+  // zakonczenia) oraz kierunek (malejaco/rosnaco) niezaleznie, a takze zawezic
+  // wyszukiwanie do zlecen od podanego dnia. Panel z tymi ustawieniami jest
+  // widoczny globalnie na calej tablicy (niezaleznie od wybranej zakladki
+  // Wszystkie/Przydzielone/W trakcie/Zakonczone).
+  const [doneSortField, setDoneSortField] = useState('DataUtworzenia');
+  const [doneSortDir, setDoneSortDir] = useState('desc'); // 'desc' = malejaco (najnowsze pierwsze), 'asc' = rosnaco
+  const [doneOdDate, setDoneOdDate] = useState('');
   const [dropTargetId, setDropTargetId] = useState(null);
   const [editJob, setEditJob] = useState(null);
   const pollPaused = useRef(false);
@@ -441,16 +487,18 @@ export default function Manager({
   const refresh = useCallback(async () => {
     if (pollPaused.current) return;
     try {
-      const [jobsData, mechanicyData, predefData, poNaprawieData] = await Promise.all([
+      const [jobsData, mechanicyData, predefData, poNaprawieData, statusPoNaprawieData] = await Promise.all([
         api.getJobs(),
         api.getUsers(mechanicRoles),
         api.getPredefiniowanePrace(),
         api.getWszystkieZadaniaPoNaprawie(),
+        api.getStatusZadanPoNaprawie(),
       ]);
       setJobs(jobsData);
       setMechanicy(mechanicyData);
       setPredefiniowane(predefData);
       setZadaniaPoNaprawie(poNaprawieData);
+      setStatusZadanPoNaprawie(statusPoNaprawieData);
     } catch (err) {
       setError(err.message);
     }
@@ -472,16 +520,6 @@ export default function Manager({
     setError('');
     try {
       await api.deleteJob(jobId);
-      await refresh();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function handleWykonajPoNaprawie(id) {
-    setError('');
-    try {
-      await api.wykonajZadaniePoNaprawie(id);
       await refresh();
     } catch (err) {
       setError(err.message);
@@ -574,6 +612,16 @@ export default function Manager({
 
   const noweJobs = jobs.filter(j => j.Status === 'nowe');
 
+  // Mapa JobId -> { [typ]: { wykonano, dataWykonania } } na podstawie
+  // statusZadanPoNaprawie (WSZYSTKIE zadania, nie tylko niewykonane) - uzywana
+  // do pokazania na karcie zakonczonego zlecenia informacji, czy Wyposazenie+
+  // Inspecto / Mycie zostaly juz wykonane przez mechanika.
+  const statusPoNaprawiePerJob = {};
+  for (const z of statusZadanPoNaprawie) {
+    if (!statusPoNaprawiePerJob[z.JobId]) statusPoNaprawiePerJob[z.JobId] = {};
+    statusPoNaprawiePerJob[z.JobId][z.Typ] = { wykonano: !!z.Wykonano, dataWykonania: z.DataWykonania };
+  }
+
   // Filtry zakladek na "Tablicy mechanikow": wszystkie / przydzielone (jeszcze
   // nie rozpoczete) / w trakcie / zakonczone.
   const KANBAN_FILTERS = [
@@ -590,12 +638,30 @@ export default function Manager({
     return true;
   }
 
+  // Zlecenie "pasuje" do filtra daty zakonczonych (doneOdDate) jesli jego pole
+  // wskazane w doneSortField jest >= wybranego dnia. Aktywne (niezakonczone)
+  // zlecenia nigdy nie sa odfiltrowywane przez ten filtr - dotyczy tylko zakonczonych.
+  function pasujeDoFiltraZakonczonych(job) {
+    if (job.Status !== 'zakonczone' || !doneOdDate) return true;
+    const wartosc = job[doneSortField];
+    if (!wartosc) return true;
+    return new Date(wartosc) >= new Date(doneOdDate);
+  }
+
   function getJobsForMechanik(mechanikId) {
+    const kierunek = doneSortDir === 'asc' ? 1 : -1;
     return jobs
       .filter(j => j.MechanikId === mechanikId)
+      .filter(pasujeDoFiltraZakonczonych)
       .sort((a, b) => {
         if (a.Status === 'zakonczone' && b.Status !== 'zakonczone') return 1;
         if (a.Status !== 'zakonczone' && b.Status === 'zakonczone') return -1;
+        // Dwa zakonczone zlecenia - sortuj wg wybranego pola daty i kierunku
+        // (zamiast dawnego, mylacego sortowania po nieaktualnym juz
+        // Priorytet z czasow, gdy zlecenie bylo jeszcze aktywne w kolejce).
+        if (a.Status === 'zakonczone' && b.Status === 'zakonczone') {
+          return kierunek * (new Date(a[doneSortField] || 0) - new Date(b[doneSortField] || 0));
+        }
         return a.Priorytet - b.Priorytet;
       });
   }
@@ -759,6 +825,42 @@ export default function Manager({
               );
             })}
           </div>
+
+          {/* Panel sortowania/filtrowania zakonczonych zlecen - widoczny GLOBALNIE
+              na calej tablicy, niezaleznie od wybranej zakladki powyzej, zeby
+              ustawienia nie "znikaly" przy przelaczaniu Wszystkie/Przydzielone/
+              W trakcie/Zakonczone. Dotyczy porzadku i widocznosci zakonczonych
+              zlecen w kolumnach mechanikow. */}
+          <div className="kb-done-filters">
+            <label>
+              Sortuj zakończone wg
+              <select value={doneSortField} onChange={e => setDoneSortField(e.target.value)}>
+                <option value="DataUtworzenia">daty dodania</option>
+                <option value="DataRozpoczecia">daty rozpoczęcia</option>
+                <option value="DataZakonczenia">daty zakończenia</option>
+              </select>
+            </label>
+            <label>
+              Kierunek
+              <select value={doneSortDir} onChange={e => setDoneSortDir(e.target.value)}>
+                <option value="desc">malejąco (najnowsze na górze)</option>
+                <option value="asc">rosnąco (najstarsze na górze)</option>
+              </select>
+            </label>
+            <label>
+              Od dnia
+              <input type="date" value={doneOdDate} onChange={e => setDoneOdDate(e.target.value)} />
+            </label>
+            {doneOdDate && (
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => setDoneOdDate('')}>
+                Wyczyść datę
+              </button>
+            )}
+            <span className="kb-done-filters-hint">
+              Domyślnie: najnowsze wg daty dodania na górze. Filtr działa we wszystkich zakładkach tablicy.
+            </span>
+          </div>
+
           <div className="kb-board">
             {mechanicy.map((m, i) => (
               <KanbanColumn
@@ -768,7 +870,7 @@ export default function Manager({
                 jobs={getJobsForMechanik(m.Id).filter(j => matchesKanbanFilter(j, kanbanFilter))}
                 allMechanicy={mechanicy}
                 poNaprawie={zadaniaPoNaprawie.filter(p => p.UserId === m.Id)}
-                onWykonajPoNaprawie={handleWykonajPoNaprawie}
+                statusPoNaprawiePerJob={statusPoNaprawiePerJob}
                 onMove={handleMove}
                 onReassign={handleReassign}
                 onDropJob={handleDropJob}

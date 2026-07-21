@@ -62,6 +62,11 @@ export const api = {
   wykonajZadaniePoNaprawie: (id) => request(`/followup/${id}/wykonaj`, { method: 'PUT' }),
   getPodsumowanieZadanPoNaprawie: () => request('/followup/podsumowanie'),
   getWszystkieZadaniaPoNaprawie: () => request('/followup/wszystkie'),
+  // Status (wykonano/nie) WSZYSTKICH zadan po naprawie, dla wszystkich zlecen -
+  // w odroznieniu od getWszystkieZadaniaPoNaprawie, ktore zwraca tylko
+  // niewykonane. Uzywane do pokazania na karcie zakonczonego zlecenia, czy
+  // Wyposazenie+Inspecto / Mycie zostaly juz wykonane przez mechanika.
+  getStatusZadanPoNaprawie: () => request('/followup/status-zlecenia'),
   setDodatkowePraceMechanika: (userId, wartosc) =>
     request(`/users/${userId}/dodatkowe-prace`, { method: 'PUT', body: JSON.stringify({ wartosc }) }),
   getPowiadomieniaOdbiorcy: () => request('/followup/powiadomienia'),
@@ -69,6 +74,8 @@ export const api = {
     request('/followup/powiadomienia', { method: 'PUT', body: JSON.stringify({ userIds }) }),
   setUserEmail: (id, email) =>
     request(`/users/${id}/email`, { method: 'PUT', body: JSON.stringify({ email }) }),
+  setGodzinyPracyMechanika: (id, dane) =>
+    request(`/users/${id}/godziny-pracy`, { method: 'PUT', body: JSON.stringify(dane) }),
 
   // Gospodarcze
   getGospodarczeZadania: () => request('/gospodarcze'),

@@ -38,6 +38,14 @@ const SELECT_JOBS = `
     m.id AS "MechanikId",
     m.full_name AS "MechanikFullName",
     m.email AS "MechanikEmail",
+    m.godz_tydz_od AS "MechGodzTydzOd",
+    m.godz_tydz_do AS "MechGodzTydzDo",
+    m.godz_tydz_przerwa_od AS "MechGodzTydzPrzerwaOd",
+    m.godz_tydz_przerwa_min AS "MechGodzTydzPrzerwaMin",
+    m.godz_sob_od AS "MechGodzSobOd",
+    m.godz_sob_do AS "MechGodzSobDo",
+    m.godz_sob_przerwa_od AS "MechGodzSobPrzerwaOd",
+    m.godz_sob_przerwa_min AS "MechGodzSobPrzerwaMin",
     u.full_name AS "UtworzonoPrzezFullName"
   FROM jobs j
   JOIN cars c ON c.id = j.car_id

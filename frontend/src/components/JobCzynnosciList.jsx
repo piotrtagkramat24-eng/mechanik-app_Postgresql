@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import CzynnoscElapsedBar from './CzynnoscElapsedBar.jsx';
-import { formatCzasSzacowany } from '../utils/jobTimeUtils.js';
+import { formatCzasSzacowany, harmonogramZJoba } from '../utils/jobTimeUtils.js';
 
 // Parsuje kolumne CzynnosciJson (FOR JSON PATH z backendu) na tablice obiektow
 // [{ Id, Nazwa, CzasMin, CzasSredni, CzasMax, PredefiniowanaPracaId, Status,
@@ -40,6 +40,7 @@ export default function JobCzynnosciList({
   onFinishCzynnosc,
 }) {
   const czynnosci = parseCzynnosci(job);
+  const harmonogram = harmonogramZJoba(job);
   const [wybrana, setWybrana] = useState('');
   const [wlasna, setWlasna] = useState('');
   const [wlasnyCzas, setWlasnyCzas] = useState('');
@@ -132,7 +133,7 @@ export default function JobCzynnosciList({
                     ×
                   </button>
                 )}
-                {cz.DataRozpoczecia && <CzynnoscElapsedBar czynnosc={cz} />}
+                {cz.DataRozpoczecia && <CzynnoscElapsedBar czynnosc={cz} harmonogram={harmonogram} />}
                 {allowStatusChange && !zakonczona && (
                   <div className="job-czynnosci-item-actions">
                     {cz.Status === 'oczekuje' && (

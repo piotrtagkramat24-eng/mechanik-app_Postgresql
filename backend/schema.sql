@@ -1,6 +1,6 @@
 -- ============================================================
 --  WARSZTAT APP — JEDYNY I KOMPLETNY SKRYPT BAZY DANYCH (PostgreSQL)
---  Wersja: v19-pg (port z MSSQL na PostgreSQL)
+--  Wersja: v20-pg (port z MSSQL na PostgreSQL)
 --
 --  To jest JEDYNY plik SQL potrzebny do uruchomienia aplikacji.
 --  W odroznieniu od poprzedniej (MSSQL) wersji tego pliku, ktora
@@ -33,6 +33,22 @@ CREATE TABLE IF NOT EXISTS users (
     role                    VARCHAR(30)  NOT NULL,
     email                   VARCHAR(200) NULL,
     wykonuje_dodatkowe_prace BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Godziny pracy (v20) - dynamiczna konfiguracja per uzytkownik, zeby pasek
+    -- uplywu czasu (i szacowany czas wykonania) liczyly sie wg RZECZYWISTYCH
+    -- godzin roboczych, a nie zegarowych 24h. Domyslnie: pon-pt 8:00-17:00
+    -- z przerwa 11:00-12:00, sobota 8:00-14:00 bez przerwy (firmowy standard) -
+    -- kazdy mechanik moze miec to nadpisane indywidualnie w Super Adminie.
+    -- Godziny trzymane jako VARCHAR(5) "HH:MM" (prosciej niz typ TIME przy
+    -- serializacji do JSON). *_przerwa_min = 0 oznacza brak przerwy tego dnia.
+    -- godz_sob_* = NULL oznacza, ze uzytkownik w ogole nie pracuje w soboty.
+    godz_tydz_od            VARCHAR(5) NOT NULL DEFAULT '08:00',
+    godz_tydz_do            VARCHAR(5) NOT NULL DEFAULT '17:00',
+    godz_tydz_przerwa_od    VARCHAR(5) NULL DEFAULT '11:00',
+    godz_tydz_przerwa_min   INT NOT NULL DEFAULT 60,
+    godz_sob_od             VARCHAR(5) NULL DEFAULT '08:00',
+    godz_sob_do             VARCHAR(5) NULL DEFAULT '14:00',
+    godz_sob_przerwa_od     VARCHAR(5) NULL DEFAULT NULL,
+    godz_sob_przerwa_min    INT NOT NULL DEFAULT 0,
     CONSTRAINT ck_users_role CHECK (
         role IN ('szef', 'kierownik', 'mechanik', 'pracownik_gospodarczy', 'administrator', 'superadmin')
     )

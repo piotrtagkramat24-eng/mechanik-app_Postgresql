@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { getCzynnoscElapsedInfo, formatGodziny } from '../utils/jobTimeUtils.js';
+import { getCzynnoscElapsedInfo, formatGodziny, DOMYSLNY_HARMONOGRAM } from '../utils/jobTimeUtils.js';
 
 // Pasek postepu DLA POJEDYNCZEJ CZYNNOSCI (kazda ma wlasny, niezalezny od
 // pozostalych na tym samym zleceniu). Widoczny tylko gdy czynnosc jest
 // rozpoczeta lub zakonczona (ma DataRozpoczecia).
-export default function CzynnoscElapsedBar({ czynnosc }) {
+// `harmonogram` - godziny pracy mechanika przypisanego do zlecenia (patrz
+// harmonogramZJoba w jobTimeUtils.js), zeby pasek liczyl czas ROBOCZY a nie
+// zegarowy. Rodzic (JobCzynnosciList) przekazuje je wyliczone z Job.
+export default function CzynnoscElapsedBar({ czynnosc, harmonogram = DOMYSLNY_HARMONOGRAM }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -14,7 +17,7 @@ export default function CzynnoscElapsedBar({ czynnosc }) {
 
   if (!czynnosc.DataRozpoczecia) return null;
 
-  const info = getCzynnoscElapsedInfo(czynnosc, now);
+  const info = getCzynnoscElapsedInfo(czynnosc, now, harmonogram);
   if (!info) return null;
 
   const { elapsedHours, estimateHours, percent, status } = info;

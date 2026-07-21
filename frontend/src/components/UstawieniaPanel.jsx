@@ -1,10 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
 
+// Pola formularza godzin pracy wyciagniete z rekordu uzytkownika (kolumny
+// Godz* zwracane przez GET /api/users) - patrz DOMYSLNY_HARMONOGRAM w
+// jobTimeUtils.js dla domyslnych wartosci firmowych.
+function godzinyDraftZUsera(u) {
+  return {
+    godzTydzOd: u.GodzTydzOd || '08:00',
+    godzTydzDo: u.GodzTydzDo || '17:00',
+    godzTydzPrzerwaOd: u.GodzTydzPrzerwaOd ?? '11:00',
+    godzTydzPrzerwaMin: u.GodzTydzPrzerwaMin != null ? String(u.GodzTydzPrzerwaMin) : '60',
+    // sobota moze byc pusta (== nie pracuje w soboty) - '' zamiast null, zeby dzialalo w <input type="time">
+    sobotaPracuje: !!(u.GodzSobOd && u.GodzSobDo),
+    godzSobOd: u.GodzSobOd || '08:00',
+    godzSobDo: u.GodzSobDo || '14:00',
+    godzSobPrzerwaOd: u.GodzSobPrzerwaOd ?? '',
+    godzSobPrzerwaMin: u.GodzSobPrzerwaMin != null ? String(u.GodzSobPrzerwaMin) : '0',
+  };
+}
+
 export default function UstawieniaPanel() {
   const [users, setUsers] = useState([]);
   const [emailDrafts, setEmailDrafts] = useState({});
   const [powiadomienia, setPowiadomienia] = useState([]);
+  const [godzinyDrafts, setGodzinyDrafts] = useState({});
   const [error, setError] = useState('');
   const [zapisano, setZapisano] = useState('');
 
@@ -16,6 +35,7 @@ export default function UstawieniaPanel() {
       ]);
       setUsers(wszyscy);
       setEmailDrafts(Object.fromEntries(wszyscy.map(u => [u.Id, u.Email || ''])));
+      setGodzinyDrafts(Object.fromEntries(wszyscy.map(u => [u.Id, godzinyDraftZUsera(u)])));
       setPowiadomienia(powRes.filter(u => u.Aktywny).map(u => u.Id));
     } catch (err) {
       setError(err.message);
@@ -70,8 +90,40 @@ export default function UstawieniaPanel() {
     }
   }
 
+  function handleZmienGodziny(userId, pole, wartosc) {
+    setGodzinyDrafts(d => ({ ...d, [userId]: { ...d[userId], [pole]: wartosc } }));
+  }
+
+  // Zapisuje godziny pracy mechanika (dynamiczny harmonogram uzywany przez
+  // pasek uplywu czasu na Tablicy mechanikow - patrz jobTimeUtils.js).
+  // Gdy "sobotaPracuje" jest odznaczone, wysylamy null dla godzin soboty -
+  // oznacza to, ze mechanik w ogole nie pracuje w tym dniu.
+  async function handleZapiszGodziny(userId) {
+    setError('');
+    const draft = godzinyDrafts[userId];
+    if (!draft) return;
+    try {
+      await api.setGodzinyPracyMechanika(userId, {
+        godzTydzOd: draft.godzTydzOd,
+        godzTydzDo: draft.godzTydzDo,
+        godzTydzPrzerwaOd: Number(draft.godzTydzPrzerwaMin) > 0 ? draft.godzTydzPrzerwaOd : null,
+        godzTydzPrzerwaMin: Number(draft.godzTydzPrzerwaMin) || 0,
+        godzSobOd: draft.sobotaPracuje ? draft.godzSobOd : null,
+        godzSobDo: draft.sobotaPracuje ? draft.godzSobDo : null,
+        godzSobPrzerwaOd: draft.sobotaPracuje && Number(draft.godzSobPrzerwaMin) > 0 ? draft.godzSobPrzerwaOd : null,
+        godzSobPrzerwaMin: draft.sobotaPracuje ? (Number(draft.godzSobPrzerwaMin) || 0) : 0,
+      });
+      pokazZapisano('Zapisano godziny pracy.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   const szefKierownik = users.filter(u => u.Role === 'szef' || u.Role === 'kierownik');
   const mechanicy = users.filter(u => u.Role === 'mechanik');
+  // Kierownik tez moze miec przydzielone wlasne zlecenia ("Moje zlecenia" /
+  // Tablica mechanikow), wiec godziny pracy konfigurujemy dla obu rol.
+  const mechanicyIKierownicy = users.filter(u => u.Role === 'mechanik' || u.Role === 'kierownik');
 
   return (
     <div className="ustawienia-wrap">
@@ -141,6 +193,71 @@ export default function UstawieniaPanel() {
               {u.FullName}
             </label>
           ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Godziny pracy mechaników</h2>
+        <p className="panel-hint">
+          Pasek upływu czasu na Tablicy mechaników liczy czas trwania roboty wg RZECZYWISTYCH godzin
+          pracy danej osoby (a nie zegarowych 24h) — pomijając noce, przerwę obiadową i dni wolne.
+          Przerwę możesz ustawić na 0 minut, jeśli danego dnia nie obowiązuje. Sobotę można całkiem
+          wyłączyć, jeśli dana osoba w soboty nie pracuje.
+        </p>
+        <div className="ustawienia-godziny-list">
+          {mechanicyIKierownicy.length === 0 && <p>Brak kont z rolą „mechanik” lub „kierownik” w systemie.</p>}
+          {mechanicyIKierownicy.map(u => {
+            const d = godzinyDrafts[u.Id];
+            if (!d) return null;
+            return (
+              <div key={u.Id} className="ustawienia-godziny-card">
+                <div className="ustawienia-godziny-nazwa">{u.FullName} <span className="ustawienia-rola">({u.Role})</span></div>
+
+                <div className="ustawienia-godziny-blok">
+                  <div className="ustawienia-godziny-blok-tytul">Poniedziałek–piątek</div>
+                  <div className="ustawienia-godziny-rzad">
+                    <label>Od <input type="time" value={d.godzTydzOd} onChange={e => handleZmienGodziny(u.Id, 'godzTydzOd', e.target.value)} /></label>
+                    <label>Do <input type="time" value={d.godzTydzDo} onChange={e => handleZmienGodziny(u.Id, 'godzTydzDo', e.target.value)} /></label>
+                  </div>
+                  <div className="ustawienia-godziny-rzad">
+                    <label>Przerwa od <input type="time" value={d.godzTydzPrzerwaOd || ''} disabled={Number(d.godzTydzPrzerwaMin) <= 0} onChange={e => handleZmienGodziny(u.Id, 'godzTydzPrzerwaOd', e.target.value)} /></label>
+                    <label>Ile minut <input type="number" min="0" step="5" className="ustawienia-godziny-min" value={d.godzTydzPrzerwaMin} onChange={e => handleZmienGodziny(u.Id, 'godzTydzPrzerwaMin', e.target.value)} /></label>
+                    <span className="ustawienia-godziny-podpowiedz">0 = brak przerwy w tygodniu</span>
+                  </div>
+                </div>
+
+                <div className="ustawienia-godziny-blok">
+                  <div className="ustawienia-godziny-blok-tytul">
+                    <label className="checkbox-option checkbox-option--inline">
+                      <input
+                        type="checkbox"
+                        checked={d.sobotaPracuje}
+                        onChange={e => handleZmienGodziny(u.Id, 'sobotaPracuje', e.target.checked)}
+                      />
+                      Pracuje w soboty
+                    </label>
+                  </div>
+                  {d.sobotaPracuje && (
+                    <>
+                      <div className="ustawienia-godziny-rzad">
+                        <label>Od <input type="time" value={d.godzSobOd} onChange={e => handleZmienGodziny(u.Id, 'godzSobOd', e.target.value)} /></label>
+                        <label>Do <input type="time" value={d.godzSobDo} onChange={e => handleZmienGodziny(u.Id, 'godzSobDo', e.target.value)} /></label>
+                      </div>
+                      <div className="ustawienia-godziny-rzad">
+                        <label>Przerwa od <input type="time" value={d.godzSobPrzerwaOd || ''} disabled={Number(d.godzSobPrzerwaMin) <= 0} onChange={e => handleZmienGodziny(u.Id, 'godzSobPrzerwaOd', e.target.value)} /></label>
+                        <label>Ile minut <input type="number" min="0" step="5" className="ustawienia-godziny-min" value={d.godzSobPrzerwaMin} onChange={e => handleZmienGodziny(u.Id, 'godzSobPrzerwaMin', e.target.value)} /></label>
+                        <span className="ustawienia-godziny-podpowiedz">0 = brak przerwy w sobotę</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <button className="btn btn-secondary btn-small" onClick={() => handleZapiszGodziny(u.Id)}>
+                  Zapisz godziny
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>

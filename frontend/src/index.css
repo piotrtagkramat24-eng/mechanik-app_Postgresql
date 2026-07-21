@@ -621,6 +621,29 @@ body {
 
 .kb-filter-tabs { flex: 0 0 auto; padding: 10px 16px 0; }
 
+.kb-done-filters {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin: 0 16px 4px;
+  background: var(--surface-2, rgba(0,0,0,0.02));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.kb-done-filters label { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+.kb-done-filters select,
+.kb-done-filters input[type="date"] {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.kb-done-filters-hint { color: var(--text-3); font-style: italic; }
+
 .kb-board {
   display: flex;
   gap: 0;
@@ -726,6 +749,13 @@ body {
 .kb-card-ponaprawie-ikona {
   font-size: 14px;
   line-height: 1;
+}
+
+.kb-card-ponaprawie-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-style: italic;
 }
 
 .kb-column-count {
@@ -1706,6 +1736,9 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 0 10px 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .kb-card--done {
@@ -1717,6 +1750,31 @@ body {
 .kb-card--done:hover { box-shadow: none !important; border-color: var(--border) !important; }
 
 .kb-card-opis--done { color: var(--text-3); }
+
+.kb-done-ponaprawie-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.kb-done-ponaprawie-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.kb-done-ponaprawie-badge--ok {
+  background: var(--green-light);
+  color: var(--green);
+}
+
+.kb-done-ponaprawie-badge--pending {
+  background: var(--amber-light);
+  color: var(--amber);
+}
 
 .kb-done-date {
   font-size: 10px;
@@ -1971,21 +2029,36 @@ body {
   .job-card-actions select,
   .job-card-actions .btn { width: 100%; }
 
-  /* --- Manager kanban — CRITICAL SCROLLING FIX --- */
-  /* On mobile kanban becomes vertical list, no fixed height */
+  /* --- Manager kanban — per-mechanic scrolling on mobile --- */
+  /* Kolumny mechanikow ukladaja sie pionowo (jedna pod druga), a strona
+     przewija sie miedzy nimi normalnie. Kazda kolumna ma jednak ograniczona
+     wysokosc i WLASNY scroll dla listy zlecen - dzieki temu, gdy mechanik ma
+     kilka/kilkanascie zlecen (na kazdej zakladce: Wszystkie/Przydzielone/
+     W trakcie/Zakonczone), liste da sie przewinac w obrebie jego kolumny,
+     zamiast urywac widok bez mozliwosci przewiniecia. */
   .manager-root { height: auto !important; overflow: visible !important; }
   .kb-board-wrap { overflow: visible !important; flex: none; }
-  .kb-board { min-width: unset !important; flex-direction: column; }
+  .kb-board { min-width: unset !important; flex-direction: column; gap: 10px; }
   .kb-column {
     width: 100% !important;
     min-width: unset !important;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 62vh;
+    overflow: hidden;
   }
-  /* Column body: don't clip on mobile, show all cards */
+  /* Column body: WLASNY scroll, ograniczona wysokosc zamiast rozciagania
+     calej strony w nieskonczonosc. */
   .kb-column-body {
-    max-height: none !important;
-    overflow-y: visible !important;
+    max-height: 42vh;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kb-done-list {
+    max-height: 38vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* --- Boss tabs — fix scroll for pracownik gospodarczy tab --- */
@@ -2525,6 +2598,33 @@ body {
 .ustawienia-rola { color: var(--text-3); font-weight: 500; }
 .ustawienia-typ-block { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
 .ustawienia-typ-block:first-of-type { margin-top: 6px; padding-top: 0; border-top: none; }
+
+/* Godziny pracy mechanikow (dynamiczny harmonogram per osoba) */
+.ustawienia-godziny-list { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+.ustawienia-godziny-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-2, rgba(0,0,0,0.015));
+}
+.ustawienia-godziny-nazwa { font-weight: 600; font-size: 14px; }
+.ustawienia-godziny-blok { display: flex; flex-direction: column; gap: 8px; }
+.ustawienia-godziny-blok-tytul { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.02em; }
+.ustawienia-godziny-rzad { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ustawienia-godziny-rzad label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.ustawienia-godziny-rzad input[type="time"],
+.ustawienia-godziny-rzad input[type="number"] {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.ustawienia-godziny-min { width: 64px; }
+.ustawienia-godziny-podpowiedz { font-size: 12px; color: var(--text-3); font-style: italic; }
+.checkbox-option--inline { display: inline-flex; font-weight: 600; color: var(--text-3); text-transform: none; letter-spacing: 0; font-size: 13px; }
 
 /* ============================================================
    Raporty (szef / superadmin) — zestawienia pracy mechanikow

@@ -11,7 +11,11 @@ router.get('/', async (req, res) => {
   try {
     let query = `SELECT id AS "Id", username AS "Username", full_name AS "FullName",
                         role AS "Role", email AS "Email",
-                        wykonuje_dodatkowe_prace AS "WykonujeDodatkowePrace"
+                        wykonuje_dodatkowe_prace AS "WykonujeDodatkowePrace",
+                        godz_tydz_od AS "GodzTydzOd", godz_tydz_do AS "GodzTydzDo",
+                        godz_tydz_przerwa_od AS "GodzTydzPrzerwaOd", godz_tydz_przerwa_min AS "GodzTydzPrzerwaMin",
+                        godz_sob_od AS "GodzSobOd", godz_sob_do AS "GodzSobDo",
+                        godz_sob_przerwa_od AS "GodzSobPrzerwaOd", godz_sob_przerwa_min AS "GodzSobPrzerwaMin"
                  FROM users`;
     const params = [];
 
@@ -66,6 +70,74 @@ router.put('/:id/dodatkowe-prace', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas zapisywania ustawienia.' });
+  }
+});
+
+// Waliduje napis "HH:MM" (00:00-23:59). Zwraca true dla null/undefined/'' (dozwolone,
+// oznacza "brak" - np. mechanik nie pracuje w soboty).
+function poprawnaGodzinaLubPusta(val) {
+  if (val === null || val === undefined || val === '') return true;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(val));
+}
+
+// PUT /api/users/:id/godziny-pracy - dynamiczna konfiguracja godzin pracy
+// mechanika (super admin). Uzywana przez pasek uplywu czasu na "Tablicy
+// mechanikow", zeby liczyc czas trwania roboty wg RZECZYWISTYCH godzin
+// roboczych zamiast zegarowych 24h.
+// body: {
+//   godzTydzOd, godzTydzDo,                 // "HH:MM", pon-pt
+//   godzTydzPrzerwaOd, godzTydzPrzerwaMin,  // przerwa w tygodniu; Min=0 = brak przerwy
+//   godzSobOd, godzSobDo,                   // "HH:MM" lub null = nie pracuje w soboty
+//   godzSobPrzerwaOd, godzSobPrzerwaMin,    // przerwa w sobote; Min=0 = brak przerwy
+// }
+router.put('/:id/godziny-pracy', async (req, res) => {
+  const {
+    godzTydzOd, godzTydzDo, godzTydzPrzerwaOd, godzTydzPrzerwaMin,
+    godzSobOd, godzSobDo, godzSobPrzerwaOd, godzSobPrzerwaMin,
+  } = req.body;
+
+  if (!poprawnaGodzinaLubPusta(godzTydzOd) || !poprawnaGodzinaLubPusta(godzTydzDo) ||
+      !poprawnaGodzinaLubPusta(godzTydzPrzerwaOd) || !poprawnaGodzinaLubPusta(godzSobOd) ||
+      !poprawnaGodzinaLubPusta(godzSobDo) || !poprawnaGodzinaLubPusta(godzSobPrzerwaOd)) {
+    return res.status(400).json({ error: 'Godziny muszą być w formacie GG:MM (np. 08:00).' });
+  }
+  if (!godzTydzOd || !godzTydzDo) {
+    return res.status(400).json({ error: 'Podaj godziny pracy w tygodniu (od-do).' });
+  }
+  const tydzPrzerwaMin = Number(godzTydzPrzerwaMin) || 0;
+  const sobPrzerwaMin = Number(godzSobPrzerwaMin) || 0;
+  if (tydzPrzerwaMin < 0 || sobPrzerwaMin < 0) {
+    return res.status(400).json({ error: 'Czas przerwy nie może być ujemny.' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE users SET
+         godz_tydz_od = $1,
+         godz_tydz_do = $2,
+         godz_tydz_przerwa_od = $3,
+         godz_tydz_przerwa_min = $4,
+         godz_sob_od = $5,
+         godz_sob_do = $6,
+         godz_sob_przerwa_od = $7,
+         godz_sob_przerwa_min = $8
+       WHERE id = $9`,
+      [
+        godzTydzOd,
+        godzTydzDo,
+        tydzPrzerwaMin > 0 ? (godzTydzPrzerwaOd || null) : null,
+        tydzPrzerwaMin,
+        godzSobOd || null,
+        godzSobDo || null,
+        sobPrzerwaMin > 0 ? (godzSobPrzerwaOd || null) : null,
+        sobPrzerwaMin,
+        req.params.id,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Błąd serwera podczas zapisywania godzin pracy.' });
   }
 });
 

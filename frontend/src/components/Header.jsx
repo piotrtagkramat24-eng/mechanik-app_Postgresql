@@ -23,7 +23,9 @@ export default function Header({ user, onLogout }) {
     <header className="app-header">
       <div>
         <h1>Warsztat</h1>
-        
+        <span className="app-header-role">
+          {ROLE_ICONS[user.Role] || ''} {ROLE_LABELS[user.Role] || user.Role}
+        </span>
       </div>
       <div className="app-header-user">
         <span>{user.FullName}</span>

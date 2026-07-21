@@ -140,6 +140,26 @@ router.put('/:id/wykonaj', async (req, res) => {
   }
 });
 
+// GET /api/followup/status-zlecenia - status (wykonano/nie) WSZYSTKICH zadan
+// po naprawie (w odroznieniu od /wszystkie, ktore zwraca TYLKO niewykonane).
+// Uzywane przez tablice mechanikow do pokazania na karcie JUZ ZAKONCZONEGO
+// zlecenia, czy Wyposazenie+Inspecto i Mycie zostaly wykonane przez mechanika,
+// czy jeszcze na niego czekaja - inaczej ta informacja znikala calkowicie po
+// wykonaniu zadania (bo /wszystkie i /moje/:userId celowo pokazuja tylko to,
+// co jeszcze trzeba zrobic).
+router.get('/status-zlecenia', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT job_id AS "JobId", typ AS "Typ", wykonano AS "Wykonano", data_wykonania AS "DataWykonania"
+      FROM zadania_po_naprawie
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Błąd serwera podczas pobierania statusu zadań po naprawie.' });
+  }
+});
+
 // GET /api/followup/powiadomienia
 router.get('/powiadomienia', async (req, res) => {
   try {
