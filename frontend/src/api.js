@@ -1,10 +1,40 @@
 const BASE = '/api';
+const TOKEN_KEY = 'warsztat_token';
+
+// Token JWT wydany przy logowaniu (patrz api.login ponizej) - trzymany w
+// localStorage, zeby przetrwal odswiezenie strony. setToken/clearToken
+// wywoluje App.jsx odpowiednio po zalogowaniu i wylogowaniu.
+export function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+}
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
 
 async function request(path, options = {}) {
+  const token = getToken();
   const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   });
+
+  if (res.status === 401) {
+    // Token wygasl / jest nieprawidlowy - czyscimy sesje i wracamy do ekranu
+    // logowania (przeladowanie strony jest najprostszym, niezawodnym sposobem
+    // resetu calego stanu Reacta bez dodatkowej "magii" globalnego stanu).
+    clearToken();
+    localStorage.removeItem('warsztat_user');
+    if (!path.startsWith('/auth/login')) {
+      window.location.reload();
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `HTTP ${res.status}`);
@@ -15,6 +45,8 @@ async function request(path, options = {}) {
 export const api = {
   login: (username, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  setUserPassword: (id, newPassword) =>
+    request(`/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ newPassword }) }),
 
   getUsers: (role) => request('/users' + (role ? `?role=${role}` : '')),
   getCars: () => request('/cars'),

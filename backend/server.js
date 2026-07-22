@@ -7,7 +7,10 @@ const os      = require('os');
 const fs      = require('fs');
 require('dotenv').config();
 
+const bcrypt  = require('bcryptjs');
+
 const { pool, poolPromise } = require('./db');
+const { requireAuth } = require('./middleware/auth');
 const authRoutes       = require('./routes/auth');
 const usersRoutes      = require('./routes/users');
 const carsRoutes       = require('./routes/cars');
@@ -22,7 +25,14 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '15mb' })); // limit podniesiony ze wzgledu na zdjecia (base64) dolaczane do zlecen
 
+// /api/auth (login) zostaje PUBLICZNE - to jedyny endpoint API dostepny bez
+// tokenu (inaczej nikt nie moglby sie w ogole zalogowac). Wszystkie pozostale
+// endpointy ponizej wymagaja juz naglowka "Authorization: Bearer <token>"
+// (patrz middleware/auth.js) - bez wazneg tokenu API zwroci 401.
 app.use('/api/auth',       authRoutes);
+
+app.use('/api', requireAuth);
+
 app.use('/api/users',      usersRoutes);
 app.use('/api/cars',       carsRoutes);
 app.use('/api/jobs',       jobsRoutes);
@@ -75,6 +85,24 @@ async function runSchema() {
   console.log('[Migracja] Schemat aktualny.');
 }
 
+// Jednorazowa migracja bezpieczenstwa: haszuje (bcrypt) kazde haslo w tabeli
+// users, ktore wciaz jest jawnym tekstem (np. konta zasiane przez schema.sql
+// przy pierwszym uruchomieniu, albo starsza baze sprzed wprowadzenia hashowania).
+// Bcrypt-owe hashe zawsze zaczynaja sie od "$2" - to wystarczajacy test, bo
+// jawne hasla w tej aplikacji to proste ciagi (np. "1234"), ktore nigdy nie
+// zaczynaja sie od tego prefiksu. Idempotentne - bezpieczne do uruchamiania
+// przy kazdym starcie serwera.
+async function hashujIstniejaceHasla() {
+  const result = await pool.query(`SELECT id, password FROM users WHERE password NOT LIKE '$2%'`);
+  if (result.rows.length === 0) return;
+
+  for (const row of result.rows) {
+    const hash = await bcrypt.hash(row.password, 10);
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, row.id]);
+  }
+  console.log(`[Bezpieczeństwo] Zahaszowano ${result.rows.length} haseł zapisanych wcześniej jawnym tekstem.`);
+}
+
 // Wczytaj certyfikaty SSL (wygenerowane przez mkcert)
 function loadSSL() {
   const certFile = path.join(__dirname, '192.168.22.34+2.pem');
@@ -96,6 +124,7 @@ function loadSSL() {
 // Uruchom serwer po migracji
 poolPromise
   .then(() => runSchema())
+  .then(() => hashujIstniejaceHasla())
   .then(() => {
     const ssl = loadSSL();
 

@@ -22,6 +22,7 @@ function godzinyDraftZUsera(u) {
 export default function UstawieniaPanel() {
   const [users, setUsers] = useState([]);
   const [emailDrafts, setEmailDrafts] = useState({});
+  const [hasloDrafts, setHasloDrafts] = useState({});
   const [powiadomienia, setPowiadomienia] = useState([]);
   const [godzinyDrafts, setGodzinyDrafts] = useState({});
   const [error, setError] = useState('');
@@ -54,6 +55,25 @@ export default function UstawieniaPanel() {
     try {
       await api.setUserEmail(userId, emailDrafts[userId] || '');
       pokazZapisano('Zapisano adres e-mail.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  // Superadmin recznie ustawia nowe haslo wybranemu uzytkownikowi (np. gdy
+  // ktos zapomni swojego) - trafia do backendu zahaszowane (bcrypt), patrz
+  // PUT /api/users/:id/password w backend/routes/users.js.
+  async function handleZapiszHaslo(userId) {
+    setError('');
+    const nowe = (hasloDrafts[userId] || '').trim();
+    if (nowe.length < 6) {
+      setError('Nowe hasło musi mieć co najmniej 6 znaków.');
+      return;
+    }
+    try {
+      await api.setUserPassword(userId, nowe);
+      setHasloDrafts(d => ({ ...d, [userId]: '' }));
+      pokazZapisano('Ustawiono nowe hasło.');
     } catch (err) {
       setError(err.message);
     }
@@ -145,6 +165,33 @@ export default function UstawieniaPanel() {
               />
               <button className="btn btn-secondary btn-small" onClick={() => handleZapiszEmail(u.Id)}>
                 Zapisz
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Reset hasła użytkownika</h2>
+        <p className="panel-hint">
+          Ustaw nowe hasło dla wybranego konta (np. gdy ktoś zapomni swojego). Hasło musi mieć co
+          najmniej 6 znaków. Nowe hasło zostaje od razu zahaszowane i nigdzie nie jest zapisywane
+          jawnym tekstem — przekaż je danej osobie bezpośrednio (np. ustnie).
+        </p>
+        <div className="ustawienia-email-list">
+          {users.map(u => (
+            <div key={u.Id} className="ustawienia-email-row">
+              <span className="ustawienia-email-name">
+                {u.FullName} <span className="ustawienia-rola">({u.Role})</span>
+              </span>
+              <input
+                type="text"
+                placeholder="nowe hasło (min. 6 znaków)"
+                value={hasloDrafts[u.Id] ?? ''}
+                onChange={(e) => setHasloDrafts(d => ({ ...d, [u.Id]: e.target.value }))}
+              />
+              <button className="btn btn-secondary btn-small" onClick={() => handleZapiszHaslo(u.Id)}>
+                Ustaw hasło
               </button>
             </div>
           ))}

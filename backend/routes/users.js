@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
+const { requireRole } = require('../middleware/auth');
+
+const MIN_DLUGOSC_HASLA = 6;
 
 // GET /api/users?role=mechanik - lista uzytkownikow, opcjonalnie filtrowana po roli
 // (mozna podac kilka rol na raz, rozdzielone przecinkiem, np. ?role=mechanik,kierownik
@@ -40,9 +44,37 @@ router.get('/', async (req, res) => {
   }
 });
 
+// PUT /api/users/:id/password - superadmin recznie ustawia (resetuje) haslo
+// dowolnemu uzytkownikowi (np. gdy ktos zapomni swojego). Haslo jest hashowane
+// (bcrypt) przed zapisem - w bazie nigdy nie trzymamy hasla jawnym tekstem.
+router.put('/:id/password', requireRole('superadmin'), async (req, res) => {
+  const { newPassword } = req.body;
+
+  if (!newPassword || String(newPassword).length < MIN_DLUGOSC_HASLA) {
+    return res.status(400).json({
+      error: `Nowe hasło musi mieć co najmniej ${MIN_DLUGOSC_HASLA} znaków.`,
+    });
+  }
+
+  try {
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    const result = await pool.query('UPDATE users SET password = $1 WHERE id = $2', [
+      hash,
+      req.params.id,
+    ]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Nie znaleziono użytkownika.' });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Błąd serwera podczas zapisywania nowego hasła.' });
+  }
+});
+
 // PUT /api/users/:id/email - ustawia/zmienia adres e-mail uzytkownika
 // (potrzebny do powiadomien mailowych o zakonczonych robotach)
-router.put('/:id/email', async (req, res) => {
+router.put('/:id/email', requireRole('superadmin'), async (req, res) => {
   const { email } = req.body;
   try {
     await pool.query('UPDATE users SET email = $1 WHERE id = $2', [
@@ -59,7 +91,7 @@ router.put('/:id/email', async (req, res) => {
 // PUT /api/users/:id/dodatkowe-prace - oznacza czy mechanik rowniez wykonuje
 // "dalsze kroki" po naprawie (Wyposazenie/Inspecto/Mycie), a nie tylko naprawy.
 // Uzywane przez algorytm automatycznego przydzielania w followup.js.
-router.put('/:id/dodatkowe-prace', async (req, res) => {
+router.put('/:id/dodatkowe-prace', requireRole('superadmin'), async (req, res) => {
   const { wartosc } = req.body;
   try {
     await pool.query('UPDATE users SET wykonuje_dodatkowe_prace = $1 WHERE id = $2', [
@@ -90,7 +122,7 @@ function poprawnaGodzinaLubPusta(val) {
 //   godzSobOd, godzSobDo,                   // "HH:MM" lub null = nie pracuje w soboty
 //   godzSobPrzerwaOd, godzSobPrzerwaMin,    // przerwa w sobote; Min=0 = brak przerwy
 // }
-router.put('/:id/godziny-pracy', async (req, res) => {
+router.put('/:id/godziny-pracy', requireRole('superadmin'), async (req, res) => {
   const {
     godzTydzOd, godzTydzDo, godzTydzPrzerwaOd, godzTydzPrzerwaMin,
     godzSobOd, godzSobDo, godzSobPrzerwaOd, godzSobPrzerwaMin,

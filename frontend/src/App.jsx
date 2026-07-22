@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { setToken, clearToken } from './api.js';
 import Login from './pages/Login.jsx';
 import Boss from './pages/Boss.jsx';
 import Manager from './pages/Manager.jsx';
@@ -16,12 +17,14 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  function handleLogin(loggedUser) {
+  function handleLogin({ token, user: loggedUser }) {
+    setToken(token);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(loggedUser));
     setUser(loggedUser);
   }
 
   function handleLogout() {
+    clearToken();
     localStorage.removeItem(STORAGE_KEY);
     setUser(null);
   }
