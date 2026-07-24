@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { harmonogramZUzytkownika, roboczeGodzinyMiedzy } = require('../utils/roboczyCzas');
 
 // Raporty dla szefa/superadmina — praca mechanikow (na podstawie zakonczonych
 // zlecen) oraz pracownika gospodarczego (na podstawie historii wykonan).
@@ -39,7 +40,14 @@ router.get('/mechanicy', async (req, res) => {
          m.id AS "MechanikId",
          m.full_name AS "MechanikFullName",
          c.marka AS "Marka", c.model AS "Model", c.rejestracja AS "Rejestracja",
-         EXTRACT(EPOCH FROM (jc.data_zakonczenia - jc.data_rozpoczecia)) / 3600.0 AS "CzasRzeczywistyGodziny"
+         m.godz_tydz_od AS "MechGodzTydzOd",
+         m.godz_tydz_do AS "MechGodzTydzDo",
+         m.godz_tydz_przerwa_od AS "MechGodzTydzPrzerwaOd",
+         m.godz_tydz_przerwa_min AS "MechGodzTydzPrzerwaMin",
+         m.godz_sob_od AS "MechGodzSobOd",
+         m.godz_sob_do AS "MechGodzSobDo",
+         m.godz_sob_przerwa_od AS "MechGodzSobPrzerwaOd",
+         m.godz_sob_przerwa_min AS "MechGodzSobPrzerwaMin"
        FROM job_czynnosci jc
        JOIN jobs j ON j.id = jc.job_id
        JOIN cars c ON c.id = j.car_id
@@ -52,7 +60,37 @@ router.get('/mechanicy', async (req, res) => {
       params
     );
 
-    res.json(result.rows);
+    // Czas rzeczywisty liczymy TERAZ wzgledem godzin roboczych mechanika
+    // (pon-pt wg jego harmonogramu + przerwa, sobota jesli pracuje), a nie
+    // jako surowa roznica zegarowa (tak jak wczesniej liczylo to
+    // EXTRACT(EPOCH ...) w SQL) — spojnie z paskiem postepu na kartach
+    // zlecen (patrz frontend/src/utils/jobTimeUtils.js).
+    const wiersze = result.rows.map((w) => {
+      const harmonogram = harmonogramZUzytkownika({
+        godz_tydz_od: w.MechGodzTydzOd,
+        godz_tydz_do: w.MechGodzTydzDo,
+        godz_tydz_przerwa_od: w.MechGodzTydzPrzerwaOd,
+        godz_tydz_przerwa_min: w.MechGodzTydzPrzerwaMin,
+        godz_sob_od: w.MechGodzSobOd,
+        godz_sob_do: w.MechGodzSobDo,
+        godz_sob_przerwa_od: w.MechGodzSobPrzerwaOd,
+        godz_sob_przerwa_min: w.MechGodzSobPrzerwaMin,
+      });
+      const czasRzeczywisty = (w.DataRozpoczecia && w.DataZakonczenia)
+        ? roboczeGodzinyMiedzy(new Date(w.DataRozpoczecia), new Date(w.DataZakonczenia), harmonogram)
+        : null;
+
+      // Usuwamy pomocnicze kolumny harmonogramu z odpowiedzi — front ich nie potrzebuje.
+      const {
+        MechGodzTydzOd, MechGodzTydzDo, MechGodzTydzPrzerwaOd, MechGodzTydzPrzerwaMin,
+        MechGodzSobOd, MechGodzSobDo, MechGodzSobPrzerwaOd, MechGodzSobPrzerwaMin,
+        ...reszta
+      } = w;
+
+      return { ...reszta, CzasRzeczywistyGodziny: czasRzeczywisty };
+    });
+
+    res.json(wiersze);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas generowania raportu mechaników.' });
