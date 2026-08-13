@@ -246,25 +246,122 @@ CREATE TABLE IF NOT EXISTS powiadomienia_odbiorcy (
 CREATE TABLE IF NOT EXISTS dalsze_kroki_odbiorcy (
     id       SERIAL PRIMARY KEY,
     typ      VARCHAR(20) NOT NULL
-        CONSTRAINT ck_dko_typ CHECK (typ IN ('wyposazenie_inspecto', 'mycie')),
+        CONSTRAINT ck_dko_typ CHECK (typ IN ('wyposazenie', 'inspekto', 'mycie')),
     user_id  INT NOT NULL REFERENCES users(id)
 );
 
 -- ============================================================
--- 13. TABELA: zadania_po_naprawie — "dalsze kroki" (Wyposazenie+Inspecto
---     / Mycie) automatycznie tworzone po zakonczeniu roboty (patrz
---     backend/routes/followup.js)
+-- 13. TABELA: zadania_po_naprawie — "dalsze kroki" (Wyposazenie / Inspecto
+--     / Mycie) automatycznie tworzone po zakonczeniu roboty, wg recznego
+--     przypisania typ -> osoba (patrz tabela 13b i backend/routes/followup.js)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS zadania_po_naprawie (
     id                SERIAL PRIMARY KEY,
     job_id            INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     typ               VARCHAR(20) NOT NULL
-        CONSTRAINT ck_zpn_typ CHECK (typ IN ('wyposazenie_inspecto', 'mycie')),
+        CONSTRAINT ck_zpn_typ CHECK (typ IN ('wyposazenie', 'inspekto', 'mycie')),
     user_id           INT NOT NULL REFERENCES users(id),
     wykonano          BOOLEAN NOT NULL DEFAULT FALSE,
     data_utworzenia   TIMESTAMPTZ NOT NULL DEFAULT now(),
     data_wykonania    TIMESTAMPTZ NULL
 );
+
+-- ============================================================
+-- 13b. TABELA: dalsze_kroki_przypisania — reczne przypisanie KAZDEGO typu
+--      zadania po naprawie (Wyposazenie / Inspecto / Mycie) do KONKRETNEJ,
+--      pojedynczej osoby (jeden wiersz na typ, user_id moze byc NULL =
+--      "nie przypisano nikogo", wtedy dla tego typu nie tworzy sie zadanie).
+--      Zastepuje dawny automatyczny algorytm wyboru mechanika - patrz
+--      backend/routes/followup.js.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dalsze_kroki_przypisania (
+    typ      VARCHAR(20) PRIMARY KEY
+        CONSTRAINT ck_dkp_typ CHECK (typ IN ('wyposazenie', 'inspekto', 'mycie')),
+    user_id  INT NULL REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- ============================================================
+-- 13c. MIGRACJA: podzial dawnego, laczonego typu 'wyposazenie_inspecto' na
+--      dwa niezalezne typy 'wyposazenie' i 'inspekto', ktore mozna teraz
+--      przypisywac do roznych osob. Blok jest bezpieczny do wielokrotnego
+--      uruchamiania: po pierwszym wykonaniu nie ma juz wierszy ze starym
+--      typem, wiec przy kolejnych startach backendu nic sie nie dzieje.
+-- ============================================================
+ALTER TABLE dalsze_kroki_odbiorcy DROP CONSTRAINT IF EXISTS ck_dko_typ;
+ALTER TABLE zadania_po_naprawie   DROP CONSTRAINT IF EXISTS ck_zpn_typ;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM zadania_po_naprawie WHERE typ = 'wyposazenie_inspecto') THEN
+        -- Duplikujemy kazdy niedokonczony/zakonczony wpis jako osobne zadanie 'inspekto'
+        -- (ta sama osoba, ten sam status - dopiero od teraz mozna je rozdzielic recznie).
+        INSERT INTO zadania_po_naprawie (job_id, typ, user_id, wykonano, data_utworzenia, data_wykonania)
+        SELECT job_id, 'inspekto', user_id, wykonano, data_utworzenia, data_wykonania
+        FROM zadania_po_naprawie WHERE typ = 'wyposazenie_inspecto';
+
+        UPDATE zadania_po_naprawie SET typ = 'wyposazenie' WHERE typ = 'wyposazenie_inspecto';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM dalsze_kroki_odbiorcy WHERE typ = 'wyposazenie_inspecto') THEN
+        INSERT INTO dalsze_kroki_odbiorcy (typ, user_id)
+        SELECT 'inspekto', user_id FROM dalsze_kroki_odbiorcy WHERE typ = 'wyposazenie_inspecto';
+
+        UPDATE dalsze_kroki_odbiorcy SET typ = 'wyposazenie' WHERE typ = 'wyposazenie_inspecto';
+    END IF;
+END $$;
+
+ALTER TABLE dalsze_kroki_odbiorcy
+    ADD CONSTRAINT ck_dko_typ CHECK (typ IN ('wyposazenie', 'inspekto', 'mycie'));
+ALTER TABLE zadania_po_naprawie
+    ADD CONSTRAINT ck_zpn_typ CHECK (typ IN ('wyposazenie', 'inspekto', 'mycie'));
+
+-- ============================================================
+-- 13d. MIGRACJA: polaczenie 'wyposazenie' i 'inspekto' z powrotem w JEDEN
+--      typ 'wyposazenie' (etykieta "Wyposażenie + Inspecto" - patrz
+--      TYP_LABELS w backend/routes/followup.js). Odwraca podzial z bloku 13c
+--      na zyczenie uzytkownika - Wyposazenie i Inspecto to w praktyce jedna
+--      czynnosc wykonywana przez te sama osobe, Mycie zostaje osobne.
+--      Blok bezpieczny do wielokrotnego uruchamiania: po pierwszym wykonaniu
+--      nie ma juz wierszy typu 'inspekto', wiec kolejne starty nic nie robia.
+-- ============================================================
+ALTER TABLE dalsze_kroki_odbiorcy      DROP CONSTRAINT IF EXISTS ck_dko_typ;
+ALTER TABLE zadania_po_naprawie        DROP CONSTRAINT IF EXISTS ck_zpn_typ;
+ALTER TABLE dalsze_kroki_przypisania   DROP CONSTRAINT IF EXISTS ck_dkp_typ;
+
+DO $$
+BEGIN
+    -- zadania_po_naprawie: gdy dane zlecenie ma OBA typy (wyposazenie i
+    -- inspekto), zostawiamy wiersz 'wyposazenie' i usuwamy zduplikowany
+    -- 'inspekto'; gdy ma TYLKO 'inspekto', po prostu zmieniamy mu typ.
+    DELETE FROM zadania_po_naprawie zpn
+    WHERE zpn.typ = 'inspekto'
+      AND EXISTS (
+          SELECT 1 FROM zadania_po_naprawie z2
+          WHERE z2.job_id = zpn.job_id AND z2.typ = 'wyposazenie'
+      );
+    UPDATE zadania_po_naprawie SET typ = 'wyposazenie' WHERE typ = 'inspekto';
+
+    -- dalsze_kroki_przypisania: jeden wiersz na typ (PK), wiec jesli
+    -- 'wyposazenie' juz ma przypisanie, wiersz 'inspekto' po prostu odpada
+    -- (zeby nie nadpisywac istniejacego wyboru uzytkownika); jesli tylko
+    -- 'inspekto' mialo kogos przypisanego, przenosimy to przypisanie na
+    -- 'wyposazenie'.
+    UPDATE dalsze_kroki_przypisania
+    SET typ = 'wyposazenie'
+    WHERE typ = 'inspekto'
+      AND NOT EXISTS (SELECT 1 FROM dalsze_kroki_przypisania WHERE typ = 'wyposazenie');
+    DELETE FROM dalsze_kroki_przypisania WHERE typ = 'inspekto';
+
+    -- dalsze_kroki_odbiorcy: legacy tabela, po prostu przepisujemy typ.
+    UPDATE dalsze_kroki_odbiorcy SET typ = 'wyposazenie' WHERE typ = 'inspekto';
+END $$;
+
+ALTER TABLE dalsze_kroki_odbiorcy
+    ADD CONSTRAINT ck_dko_typ CHECK (typ IN ('wyposazenie', 'mycie'));
+ALTER TABLE zadania_po_naprawie
+    ADD CONSTRAINT ck_zpn_typ CHECK (typ IN ('wyposazenie', 'mycie'));
+ALTER TABLE dalsze_kroki_przypisania
+    ADD CONSTRAINT ck_dkp_typ CHECK (typ IN ('wyposazenie', 'mycie'));
 
 -- ============================================================
 -- 14. DANE POCZATKOWE — predefiniowane prace (93 pozycje, czasy

@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 import { api } from '../api.js';
 import { formatGodziny } from '../utils/jobTimeUtils.js';
 
@@ -26,8 +29,24 @@ function formatDataGodzina(value) {
 }
 
 // Buduje i pobiera plik CSV z podanych wierszy (do otwarcia w Excelu).
+//
+// Uwaga (formula injection w Excelu): jesli komorka CSV zaczyna sie od
+// =, +, -, @ (lub tabulatora/CR), Excel przy otwieraniu pliku PRZELICZA jej
+// zawartosc jak formule — NIEZALEZNIE od tego, ze pole jest w CSV ujete w
+// cudzyslow (cudzyslow to tylko oddzielenie pol, a nie "wymuszenie tekstu").
+// Np. czynnosc "-jest po MB Marki" trafia do Excela jako formula "=-jest po
+// MB Marki", ktorej nie da sie policzyc -> komorka pokazuje #NAME?, a caly
+// wiersz sprawia wrazenie "rozjechanego" wzgledem nagłowkow. Zabezpieczamy
+// sie dopisujac na poczatku apostrof — Excel wtedy traktuje pole jako zwykly
+// tekst i sam apostrof nie jest widoczny w komorce (dokladnie tak samo jak
+// przy recznym wpisywaniu tekstu zaczynajacego sie od minusa do Excela).
+const CSV_ZNAKI_FORMULY = ['=', '+', '-', '@', '\t', '\r'];
+function csvBezpiecznaWartosc(v) {
+  const s = String(v ?? '');
+  return CSV_ZNAKI_FORMULY.some((znak) => s.startsWith(znak)) ? `'${s}` : s;
+}
 function pobierzCsv(nazwaPliku, naglowki, wiersze) {
-  const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const escape = (v) => `"${csvBezpiecznaWartosc(v).replace(/"/g, '""')}"`;
   const tresc = [naglowki.map(escape).join(';'), ...wiersze.map((w) => w.map(escape).join(';'))].join('\r\n');
   const blob = new Blob(['\ufeff' + tresc], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -59,6 +78,39 @@ function agregujMechanicy(wiersze) {
     wpis.sumaSzacowana += Number(w.CzasSzacowanySredni) || 0;
   }
   return Array.from(mapa.values()).sort((a, b) => b.liczbaCzynnosci - a.liczbaCzynnosci);
+}
+
+// Sredni czas rzeczywisty i szacowany PER RODZAJ CZYNNOSCI (nie per mechanik) -
+// pozwala zobaczyc, ktore czynnosci systematycznie trwaja dluzej/krocej niz
+// norma. Ograniczone do TOP N najczesciej wykonywanych czynnosci w okresie,
+// zeby wykres pozostal czytelny.
+function agregujCzynnosci(wiersze, limit = 10) {
+  const mapa = new Map();
+  for (const w of wiersze) {
+    const klucz = w.Nazwa || '—';
+    if (!mapa.has(klucz)) {
+      mapa.set(klucz, { nazwa: klucz, liczba: 0, sumaRzeczywista: 0, liczbaRzeczywista: 0, sumaSzacowana: 0, liczbaSzacowana: 0 });
+    }
+    const wpis = mapa.get(klucz);
+    wpis.liczba += 1;
+    if (w.CzasRzeczywistyGodziny != null) {
+      wpis.sumaRzeczywista += Number(w.CzasRzeczywistyGodziny) || 0;
+      wpis.liczbaRzeczywista += 1;
+    }
+    if (w.CzasSzacowanySredni != null) {
+      wpis.sumaSzacowana += Number(w.CzasSzacowanySredni) || 0;
+      wpis.liczbaSzacowana += 1;
+    }
+  }
+  return Array.from(mapa.values())
+    .map((w) => ({
+      nazwa: w.nazwa,
+      liczba: w.liczba,
+      sredniaRzeczywista: w.liczbaRzeczywista > 0 ? w.sumaRzeczywista / w.liczbaRzeczywista : 0,
+      sredniaSzacowana: w.liczbaSzacowana > 0 ? w.sumaSzacowana / w.liczbaSzacowana : 0,
+    }))
+    .sort((a, b) => b.liczba - a.liczba)
+    .slice(0, limit);
 }
 
 // Parsuje numery rejestracyjne dla jednego wykonania — albo ze stalej listy
@@ -124,6 +176,7 @@ export default function Raporty() {
   useEffect(() => { generuj(); }, [generuj]);
 
   const agregatMechanicy = agregujMechanicy(wierszeMechanicy);
+  const agregatCzynnosci = agregujCzynnosci(wierszeMechanicy);
   const agregatGospodarczy = agregujGospodarczy(wierszeGospodarczy);
 
   function eksportujMechanicy() {
@@ -185,6 +238,64 @@ export default function Raporty() {
       </div>
 
       {ladowanie && <p className="raporty-loading">Wczytywanie danych…</p>}
+
+      {!ladowanie && zakladka === 'mechanicy' && agregatMechanicy.length > 0 && (
+        <section className="panel raporty-panel">
+          <div className="raporty-panel-header">
+            <h2>Czas rzeczywisty a czas szacowany — per mechanik</h2>
+          </div>
+          <div className="raporty-chart-wrap">
+            <ResponsiveContainer width="100%" height={Math.max(220, agregatMechanicy.length * 46)}>
+              <BarChart
+                data={agregatMechanicy.map((a) => ({
+                  nazwa: a.nazwa,
+                  'Czas rzeczywisty (h)': Number(a.sumaRzeczywista.toFixed(2)),
+                  'Czas szacowany (h)': Number(a.sumaSzacowana.toFixed(2)),
+                }))}
+                layout="vertical"
+                margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickFormatter={(v) => `${v}h`} />
+                <YAxis type="category" dataKey="nazwa" width={140} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => `${v} h`} />
+                <Legend />
+                <Bar dataKey="Czas rzeczywisty (h)" fill="#2952cc" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Czas szacowany (h)" fill="#d97706" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      {!ladowanie && zakladka === 'mechanicy' && agregatCzynnosci.length > 0 && (
+        <section className="panel raporty-panel">
+          <div className="raporty-panel-header">
+            <h2>Średni czas rzeczywisty a szacowany — TOP {agregatCzynnosci.length} czynności</h2>
+          </div>
+          <div className="raporty-chart-wrap">
+            <ResponsiveContainer width="100%" height={Math.max(220, agregatCzynnosci.length * 46)}>
+              <BarChart
+                data={agregatCzynnosci.map((a) => ({
+                  nazwa: a.nazwa,
+                  'Śr. czas rzeczywisty (h)': Number(a.sredniaRzeczywista.toFixed(2)),
+                  'Śr. czas szacowany (h)': Number(a.sredniaSzacowana.toFixed(2)),
+                }))}
+                layout="vertical"
+                margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickFormatter={(v) => `${v}h`} />
+                <YAxis type="category" dataKey="nazwa" width={200} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => `${v} h`} />
+                <Legend />
+                <Bar dataKey="Śr. czas rzeczywisty (h)" fill="#2952cc" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Śr. czas szacowany (h)" fill="#d97706" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
 
       {!ladowanie && zakladka === 'mechanicy' && (
         <section className="panel raporty-panel">

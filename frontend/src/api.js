@@ -88,8 +88,8 @@ export const api = {
   deleteJob: (id) => request(`/jobs/${id}`, { method: 'DELETE' }),
   getJobZdjecie: (id) => request(`/jobs/${id}/zdjecie`),
 
-  // Zadania po naprawie (Wyposazenie / Inspecto / Mycie) — przydzielane
-  // automatycznie przez algorytm (patrz backend/routes/followup.js)
+  // Zadania po naprawie (Wyposazenie / Inspecto / Mycie) — kazdy typ recznie
+  // przypisany do konkretnej osoby (patrz backend/routes/followup.js)
   getMojeZadaniaPoNaprawie: (userId) => request(`/followup/moje/${userId}`),
   wykonajZadaniePoNaprawie: (id) => request(`/followup/${id}/wykonaj`, { method: 'PUT' }),
   getPodsumowanieZadanPoNaprawie: () => request('/followup/podsumowanie'),
@@ -99,8 +99,10 @@ export const api = {
   // niewykonane. Uzywane do pokazania na karcie zakonczonego zlecenia, czy
   // Wyposazenie+Inspecto / Mycie zostaly juz wykonane przez mechanika.
   getStatusZadanPoNaprawie: () => request('/followup/status-zlecenia'),
-  setDodatkowePraceMechanika: (userId, wartosc) =>
-    request(`/users/${userId}/dodatkowe-prace`, { method: 'PUT', body: JSON.stringify({ wartosc }) }),
+  getPrzypisaniaPoNaprawie: () => request('/followup/przypisania'),
+  setPrzypisaniePoNaprawie: (typ, userId) =>
+    request('/followup/przypisania', { method: 'PUT', body: JSON.stringify({ typ, userId }) }),
+  usunZadaniePoNaprawie: (id) => request(`/followup/${id}`, { method: 'DELETE' }),
   getPowiadomieniaOdbiorcy: () => request('/followup/powiadomienia'),
   setPowiadomieniaOdbiorcy: (userIds) =>
     request('/followup/powiadomienia', { method: 'PUT', body: JSON.stringify({ userIds }) }),

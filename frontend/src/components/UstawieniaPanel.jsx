@@ -24,20 +24,23 @@ export default function UstawieniaPanel() {
   const [emailDrafts, setEmailDrafts] = useState({});
   const [hasloDrafts, setHasloDrafts] = useState({});
   const [powiadomienia, setPowiadomienia] = useState([]);
+  const [przypisania, setPrzypisania] = useState([]);
   const [godzinyDrafts, setGodzinyDrafts] = useState({});
   const [error, setError] = useState('');
   const [zapisano, setZapisano] = useState('');
 
   const refresh = useCallback(async () => {
     try {
-      const [wszyscy, powRes] = await Promise.all([
+      const [wszyscy, powRes, przypRes] = await Promise.all([
         api.getUsers(),
         api.getPowiadomieniaOdbiorcy(),
+        api.getPrzypisaniaPoNaprawie(),
       ]);
       setUsers(wszyscy);
       setEmailDrafts(Object.fromEntries(wszyscy.map(u => [u.Id, u.Email || ''])));
       setGodzinyDrafts(Object.fromEntries(wszyscy.map(u => [u.Id, godzinyDraftZUsera(u)])));
       setPowiadomienia(powRes.filter(u => u.Aktywny).map(u => u.Id));
+      setPrzypisania(przypRes);
     } catch (err) {
       setError(err.message);
     }
@@ -93,20 +96,19 @@ export default function UstawieniaPanel() {
     }
   }
 
-  // Przelacza, czy dany mechanik rowniez wykonuje dalsze kroki po naprawie
-  // (Wyposazenie/Inspecto/Mycie). System sam wybiera najlepiej dostepnego
-  // z grona mechanikow oznaczonych tutaj — patrz backend/routes/followup.js.
-  async function handleToggleDodatkowePrace(userId, aktualnaWartosc) {
-    const nowaWartosc = !aktualnaWartosc;
-    setUsers(prev => prev.map(u => u.Id === userId ? { ...u, WykonujeDodatkowePrace: nowaWartosc } : u));
+  // Reczne przypisanie kazdego typu zadania po naprawie (Wyposazenie +
+  // Inspecto / Mycie) do jednej konkretnej osoby - patrz
+  // backend/routes/followup.js (GET/PUT /api/followup/przypisania).
+  async function handleZmienPrzypisanie(typ, userId) {
     setError('');
+    const poprzednie = przypisania;
+    setPrzypisania(prev => prev.map(p => p.Typ === typ ? { ...p, UserId: userId ? Number(userId) : null } : p));
     try {
-      await api.setDodatkowePraceMechanika(userId, nowaWartosc);
+      await api.setPrzypisaniePoNaprawie(typ, userId ? Number(userId) : null);
       pokazZapisano('Zapisano przypisanie.');
     } catch (err) {
       setError(err.message);
-      // cofnij zmiane lokalnie, jesli zapis sie nie udal
-      setUsers(prev => prev.map(u => u.Id === userId ? { ...u, WykonujeDodatkowePrace: aktualnaWartosc } : u));
+      setPrzypisania(poprzednie);
     }
   }
 
@@ -140,7 +142,6 @@ export default function UstawieniaPanel() {
   }
 
   const szefKierownik = users.filter(u => u.Role === 'szef' || u.Role === 'kierownik');
-  const mechanicy = users.filter(u => u.Role === 'mechanik');
   // Kierownik tez moze miec przydzielone wlasne zlecenia ("Moje zlecenia" /
   // Tablica mechanikow), wiec godziny pracy konfigurujemy dla obu rol.
   const mechanicyIKierownicy = users.filter(u => u.Role === 'mechanik' || u.Role === 'kierownik');
@@ -219,26 +220,28 @@ export default function UstawieniaPanel() {
       </section>
 
       <section className="panel">
-        <h2>Dalsze kroki po zakończeniu roboty (Wyposażenie i Inspecto / Mycie)</h2>
+        <h2>Dalsze kroki po zakończeniu roboty (Wyposażenie + Inspecto / Mycie)</h2>
         <p className="panel-hint">
           Gdy mechanik zakończy robotę, pojazd jest mechanicznie gotowy, ale zostaje jeszcze do zrobienia:
-          Wyposażenie i Inspecto oraz Mycie. Zaznacz poniżej mechaników, którzy — oprócz napraw — również
-          wykonują te prace. System wybiera jedną osobę z tego grona i przypisuje jej OBA zadania razem
-          (nie rozdziela ich na dwie różne osoby): najpierw kogoś, kto nie ma nic przydzielonego, potem
-          kogoś bez niczego „w trakcie”, a na końcu osobę z najmniejszym obciążeniem. Mechanicy
-          niezaznaczeni tutaj dostają wyłącznie naprawy.
+          Wyposażenie + Inspecto (jedno zadanie) oraz Mycie. Dla każdego z tych zadań wybierz osobę, która
+          ma je wykonywać — każde zadanie możesz przypisać do innej osoby. Jeśli dla jakiegoś zadania nie
+          wybierzesz nikogo, zadanie to nie zostanie w ogóle utworzone po zakończeniu roboty.
         </p>
-        <div className="ustawienia-checkbox-list">
-          {mechanicy.length === 0 && <p>Brak kont z rolą „mechanik” w systemie.</p>}
-          {mechanicy.map(u => (
-            <label key={u.Id} className="checkbox-option">
-              <input
-                type="checkbox"
-                checked={!!u.WykonujeDodatkowePrace}
-                onChange={() => handleToggleDodatkowePrace(u.Id, !!u.WykonujeDodatkowePrace)}
-              />
-              {u.FullName}
-            </label>
+        <div className="ustawienia-przypisania-list">
+          {mechanicyIKierownicy.length === 0 && <p>Brak kont z rolą „mechanik” lub „kierownik” w systemie.</p>}
+          {mechanicyIKierownicy.length > 0 && przypisania.map(p => (
+            <div key={p.Typ} className="ustawienia-email-row">
+              <span className="ustawienia-email-name">{p.TypLabel}</span>
+              <select
+                value={p.UserId ?? ''}
+                onChange={(e) => handleZmienPrzypisanie(p.Typ, e.target.value || null)}
+              >
+                <option value="">— nikt (nie twórz zadania) —</option>
+                {mechanicyIKierownicy.map(u => (
+                  <option key={u.Id} value={u.Id}>{u.FullName}</option>
+                ))}
+              </select>
+            </div>
           ))}
         </div>
       </section>

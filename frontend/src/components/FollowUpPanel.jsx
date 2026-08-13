@@ -3,11 +3,11 @@ import { api } from '../api.js';
 
 const POLL_MS = 15000;
 
-// Pokazuje "dalsze kroki" po zakonczeniu roboty przez mechanika (Wyposazenie+
-// Inspecto razem / Mycie osobno), przydzielone automatycznie (patrz
-// backend/routes/followup.js). Renderuje sie tylko jesli zalogowany user
-// faktycznie ma takie zadania. Zwarty, jednolinijkowy uklad - zeby nie
-// zajmowac duzo miejsca na ekranie.
+// Pokazuje "dalsze kroki" po zakonczeniu roboty przez mechanika (Wyposazenie /
+// Inspecto / Mycie), z ktorych kazdy jest recznie przypisany do konkretnej
+// osoby (patrz backend/routes/followup.js). Renderuje sie tylko jesli
+// zalogowany user faktycznie ma takie zadania. Zwarty, jednolinijkowy uklad -
+// zeby nie zajmowac duzo miejsca na ekranie.
 export default function FollowUpPanel({ user }) {
   const [zadania, setZadania] = useState([]);
   const [zwiniety, setZwiniety] = useState(false);

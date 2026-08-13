@@ -125,14 +125,14 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
   );
 }
 
-const PO_NAPRAWIE_IKONY = { wyposazenie_inspecto: '📦', mycie: '🚿' };
-const PO_NAPRAWIE_ETYKIETY = { wyposazenie_inspecto: 'Wyposażenie i Inspecto', mycie: 'Mycie' };
+const PO_NAPRAWIE_IKONY = { wyposazenie: '📦', mycie: '🚿' };
+const PO_NAPRAWIE_ETYKIETY = { wyposazenie: 'Wyposażenie + Inspecto', mycie: 'Mycie' };
 
 // Male znaczniki na karcie ZAKONCZONEGO zlecenia pokazujace, czy dalsze kroki
-// (Wyposazenie+Inspecto / Mycie) zostaly juz wykonane przez przypisanego
+// (Wyposazenie / Inspecto / Mycie) zostaly juz wykonane przez przypisanego
 // mechanika, czy jeszcze na niego czekaja. Renderuje sie tylko jesli dla
 // danego zlecenia w ogole powstaly takie zadania (nie kazde zlecenie je ma -
-// np. gdy zaden mechanik nie ma wlaczonej flagi WykonujeDodatkowePrace).
+// np. gdy dla danego typu nikt nie jest przypisany w Ustawieniach).
 function PoNaprawieStatusBadges({ jobId, statusPoNaprawiePerJob }) {
   const status = statusPoNaprawiePerJob[jobId];
   if (!status) return null;
@@ -153,16 +153,22 @@ function PoNaprawieStatusBadges({ jobId, statusPoNaprawiePerJob }) {
   );
 }
 
-// Karta zadania "po naprawie" (Wyposazenie+Inspecto / Mycie) - wyswietlana w
+// Karta zadania "po naprawie" (Wyposazenie / Inspecto / Mycie) - wyswietlana w
 // kolumnie mechanika na tablicy Kanban jak prawdziwe zadanie do wykonania,
 // a nie tylko jako ikona w naglowku kolumny.
 //
-// Uwaga: to jest widok KIEROWNIKA/SZEFA na tablicy mechanikow - tu pokazujemy
-// TYLKO informacje, ze zadanie czeka na wykonanie (bez przycisku akcji).
-// Oznaczenie zadania jako wykonane moze zrobic wylacznie sam mechanik, ze
-// swojego panelu "Do wykonania po naprawie" (patrz FollowUpPanel.jsx) - stad
-// brak tu jakiegokolwiek przycisku/onClick.
-function PoNaprawieCard({ zadanie }) {
+// Uwaga: to jest widok KIEROWNIKA/SZEFA na tablicy mechanikow - mechanik sam
+// oznacza zadanie jako wykonane ze swojego panelu "Do wykonania po naprawie"
+// (patrz FollowUpPanel.jsx), ale kierownik/szef moze je tutaj usunac z tablicy
+// (np. gdy powstalo przez pomylke albo juz nie jest potrzebne).
+function PoNaprawieCard({ zadanie, onDelete }) {
+  function handleDelete() {
+    if (!window.confirm(`Usunąć zadanie „${zadanie.TypLabel || zadanie.Typ}” (${zadanie.Marka} ${zadanie.Model} ${zadanie.Rejestracja}) z tablicy?`)) {
+      return;
+    }
+    onDelete(zadanie.Id);
+  }
+
   return (
     <div className={`kb-card kb-card--ponaprawie kb-card--ponaprawie-${zadanie.Typ}`}>
       <div className="kb-card-body">
@@ -176,13 +182,23 @@ function PoNaprawieCard({ zadanie }) {
           <span className="kb-card-ponaprawie-status" title="Może oznaczyć jako wykonane wyłącznie przypisany mechanik">
             ⏳ Czeka na wykonanie przez mechanika
           </span>
+          {onDelete && (
+            <button
+              type="button"
+              className="kb-card-ponaprawie-usun"
+              title="Usuń to zadanie z tablicy"
+              onClick={handleDelete}
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete }) {
+function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete, onDeletePoNaprawie }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -204,11 +220,11 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
 
   // Ikony stanu zamiast liczby zlecen przy nazwisku:
   //  - 🔧 mechanik ma cos aktualnie w trakcie (Status='rozpoczete')
-  //  - 📦 czeka na niego niewykonane zadanie Wyposazenie+Inspecto po naprawie
+  //  - 📦 czeka na niego niewykonane zadanie Wyposazenie + Inspecto po naprawie
   //  - 🚿 czeka na niego niewykonane zadanie Mycie po naprawie
   //  - 🟢 nic z powyzszego - wolny
   const pracujeTeraz = jobs.some(j => j.Status === 'rozpoczete');
-  const maWyposazenieInspecto = poNaprawie.some(p => p.Typ === 'wyposazenie_inspecto');
+  const maWyposazenie = poNaprawie.some(p => p.Typ === 'wyposazenie');
   const maMycie = poNaprawie.some(p => p.Typ === 'mycie');
 
   function handleDragStart(e, job) {
@@ -265,9 +281,9 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
         <div className="kb-col-name">{mechanik.FullName}</div>
         <div className="kb-col-status-icons">
           {pracujeTeraz && <span title="W trakcie pracy" className="kb-col-icon">🔧</span>}
-          {maWyposazenieInspecto && <span title="Do zrobienia: Wyposażenie i Inspecto" className="kb-col-icon">📦</span>}
+          {maWyposazenie && <span title="Do zrobienia: Wyposażenie + Inspecto" className="kb-col-icon">📦</span>}
           {maMycie && <span title="Do zrobienia: Mycie" className="kb-col-icon">🚿</span>}
-          {!pracujeTeraz && !maWyposazenieInspecto && !maMycie && (
+          {!pracujeTeraz && !maWyposazenie && !maMycie && (
             <span title="Wolny" className="kb-col-icon kb-col-icon--free">🟢</span>
           )}
         </div>
@@ -279,7 +295,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
       {filterMode !== 'zakonczone' && poNaprawie.length > 0 && (
         <div className="kb-column-ponaprawie">
           {poNaprawie.map(z => (
-            <PoNaprawieCard key={`pn-${z.Id}`} zadanie={z} />
+            <PoNaprawieCard key={`pn-${z.Id}`} zadanie={z} onDelete={onDeletePoNaprawie} />
           ))}
         </div>
       )}
@@ -520,6 +536,16 @@ export default function Manager({
     setError('');
     try {
       await api.deleteJob(jobId);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleDeletePoNaprawie(id) {
+    setError('');
+    try {
+      await api.usunZadaniePoNaprawie(id);
       await refresh();
     } catch (err) {
       setError(err.message);
@@ -878,6 +904,7 @@ export default function Manager({
                 filterMode={kanbanFilter}
                 onEdit={setEditJob}
                 onDelete={handleDeleteJob}
+                onDeletePoNaprawie={handleDeletePoNaprawie}
               />
             ))}
             {mechanicy.length === 0 && (
