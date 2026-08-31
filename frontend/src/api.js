@@ -108,6 +108,9 @@ export const api = {
     request('/followup/powiadomienia', { method: 'PUT', body: JSON.stringify({ userIds }) }),
   setUserEmail: (id, email) =>
     request(`/users/${id}/email`, { method: 'PUT', body: JSON.stringify({ email }) }),
+  // Urlop (superadmin/szef) - patrz PUT /api/users/:id/urlop
+  setUrlop: (id, naUrlopie) =>
+    request(`/users/${id}/urlop`, { method: 'PUT', body: JSON.stringify({ naUrlopie }) }),
   setGodzinyPracyMechanika: (id, dane) =>
     request(`/users/${id}/godziny-pracy`, { method: 'PUT', body: JSON.stringify(dane) }),
 

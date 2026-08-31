@@ -745,6 +745,52 @@ body {
   opacity: 0.55;
 }
 
+/* Urlop (v21) - ikonka w naglowku kolumny Tablicy mechanikow. Dla superadmina/
+   szefa jest to klikalny przycisk (przelacza urlop), dla kierownika - tylko
+   informacyjna ikona (bez mozliwosci klikniecia), patrz Manager.jsx. */
+.kb-col-icon--urlop-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 4px;
+  opacity: 0.45;
+}
+.kb-col-icon--urlop-btn:hover {
+  opacity: 1;
+  background: var(--surface-3);
+}
+.kb-col-icon--urlop-on {
+  opacity: 1 !important;
+}
+
+.kb-column--urlop {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-2, var(--surface)),
+    var(--surface-2, var(--surface)) 10px,
+    var(--surface-3, #f1f5f9) 10px,
+    var(--surface-3, #f1f5f9) 20px
+  );
+}
+
+.kb-column-urlop-banner {
+  margin: 0 8px 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.kb-reassign-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
 /* Zadania "po naprawie" (Wyposazenie+Inspecto / Mycie) pokazane jako
    prawdziwe karty na gorze kolumny mechanika, zamiast samych ikon. */
 .kb-column-ponaprawie {
@@ -2732,3 +2778,4 @@ body {
 .raporty-detail-table td { padding: 6px 16px; color: var(--text-2); border-bottom: 1px solid var(--border); }
 .raporty-detail-table tr:last-child td { border-bottom: none; }
 .raporty-rejestracje-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+

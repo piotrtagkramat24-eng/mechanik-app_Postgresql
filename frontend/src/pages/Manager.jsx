@@ -97,9 +97,11 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
                       <button
                         key={m.Id}
                         className="kb-reassign-option"
-                        onClick={() => { onReassign(job.Id, m.Id); setMenuOpen(false); }}
+                        disabled={!!m.NaUrlopie}
+                        title={m.NaUrlopie ? 'Osoba na urlopie - nie można przydzielić' : undefined}
+                        onClick={() => { if (m.NaUrlopie) return; onReassign(job.Id, m.Id); setMenuOpen(false); }}
                       >
-                        {m.FullName}
+                        {m.FullName}{m.NaUrlopie ? ' 🏖️ (urlop)' : ''}
                       </button>
                     ))}
                 </div>
@@ -198,7 +200,7 @@ function PoNaprawieCard({ zadanie, onDelete }) {
   );
 }
 
-function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete, onDeletePoNaprawie }) {
+function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete, onDeletePoNaprawie, canManageUrlop = false, onToggleUrlop }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -226,6 +228,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
   const pracujeTeraz = jobs.some(j => j.Status === 'rozpoczete');
   const maWyposazenie = poNaprawie.some(p => p.Typ === 'wyposazenie');
   const maMycie = poNaprawie.some(p => p.Typ === 'mycie');
+  const naUrlopie = !!mechanik.NaUrlopie;
 
   function handleDragStart(e, job) {
     setDraggingId(job.Id);
@@ -270,7 +273,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
 
   return (
     <div
-      className={`kb-column ${isDropTarget ? 'kb-column--drop-target' : ''}`}
+      className={`kb-column ${isDropTarget ? 'kb-column--drop-target' : ''} ${naUrlopie ? 'kb-column--urlop' : ''}`}
       ref={columnRef}
       onDragOver={handleColumnDragOver}
       onDrop={handleColumnDrop}
@@ -283,11 +286,29 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
           {pracujeTeraz && <span title="W trakcie pracy" className="kb-col-icon">🔧</span>}
           {maWyposazenie && <span title="Do zrobienia: Wyposażenie + Inspecto" className="kb-col-icon">📦</span>}
           {maMycie && <span title="Do zrobienia: Mycie" className="kb-col-icon">🚿</span>}
-          {!pracujeTeraz && !maWyposazenie && !maMycie && (
+          {!pracujeTeraz && !maWyposazenie && !maMycie && !naUrlopie && (
             <span title="Wolny" className="kb-col-icon kb-col-icon--free">🟢</span>
+          )}
+          {/* Urlop - superadmin/szef moga kliknac, zeby przelaczyc; kierownik
+              widzi tylko ikone (bez mozliwosci klikniecia) - patrz wymaganie:
+              "ikona żeby superadmin i szef mógł zaznaczyć czy osoba jest na urlopie". */}
+          {canManageUrlop ? (
+            <button
+              type="button"
+              className={`kb-col-icon kb-col-icon--urlop-btn ${naUrlopie ? 'kb-col-icon--urlop-on' : ''}`}
+              title={naUrlopie ? 'Na urlopie - kliknij, aby cofnąć' : 'Oznacz jako na urlopie'}
+              onClick={() => onToggleUrlop(mechanik.Id, !naUrlopie)}
+            >
+              🏖️
+            </button>
+          ) : (
+            naUrlopie && <span title="Na urlopie" className="kb-col-icon kb-col-icon--urlop-on">🏖️</span>
           )}
         </div>
       </div>
+      {naUrlopie && (
+        <div className="kb-column-urlop-banner">🏖️ Na urlopie — nie można przydzielać nowych zadań</div>
+      )}
 
       {/* Zadania po naprawie sa ZAWSZE niewykonane (backend zwraca tylko
           Wykonano=0 - patrz GET /followup/wszystkie), wiec nie maja czego
@@ -499,6 +520,10 @@ export default function Manager({
   const [dropTargetId, setDropTargetId] = useState(null);
   const [editJob, setEditJob] = useState(null);
   const pollPaused = useRef(false);
+  // Tylko superadmin i szef moga zaznaczac/odznaczac urlop na Tablicy
+  // mechanikow (patrz PUT /api/users/:id/urlop) - kierownik widzi ikonke,
+  // ale nie moze jej klikac.
+  const canManageUrlop = user?.Role === 'superadmin' || user?.Role === 'szef';
 
   const refresh = useCallback(async () => {
     if (pollPaused.current) return;
@@ -566,6 +591,16 @@ export default function Manager({
     setError('');
     try {
       await api.assignMechanik(jobId, newMechanikId);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleToggleUrlop(mechanikId, naUrlopie) {
+    setError('');
+    try {
+      await api.setUrlop(mechanikId, naUrlopie);
       await refresh();
     } catch (err) {
       setError(err.message);
@@ -809,7 +844,9 @@ export default function Manager({
                     >
                       <option value="">-- wybierz mechanika --</option>
                       {mechanicy.map(m => (
-                        <option key={m.Id} value={m.Id}>{m.FullName}</option>
+                        <option key={m.Id} value={m.Id} disabled={!!m.NaUrlopie}>
+                          {m.FullName}{m.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}
+                        </option>
                       ))}
                     </select>
                     <button className="btn btn-primary" onClick={() => handleAssign(job.Id)}>
@@ -905,6 +942,8 @@ export default function Manager({
                 onEdit={setEditJob}
                 onDelete={handleDeleteJob}
                 onDeletePoNaprawie={handleDeletePoNaprawie}
+                canManageUrlop={canManageUrlop}
+                onToggleUrlop={handleToggleUrlop}
               />
             ))}
             {mechanicy.length === 0 && (

@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
     let query = `SELECT id AS "Id", username AS "Username", full_name AS "FullName",
                         role AS "Role", email AS "Email",
                         wykonuje_dodatkowe_prace AS "WykonujeDodatkowePrace",
+                        na_urlopie AS "NaUrlopie",
                         godz_tydz_od AS "GodzTydzOd", godz_tydz_do AS "GodzTydzDo",
                         godz_tydz_przerwa_od AS "GodzTydzPrzerwaOd", godz_tydz_przerwa_min AS "GodzTydzPrzerwaMin",
                         godz_sob_od AS "GodzSobOd", godz_sob_do AS "GodzSobDo",
@@ -102,6 +103,33 @@ router.put('/:id/dodatkowe-prace', requireRole('superadmin'), async (req, res) =
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas zapisywania ustawienia.' });
+  }
+});
+
+// PUT /api/users/:id/urlop - superadmin lub szef oznacza mechanika (albo
+// kierownika) jako "na urlopie" / wraca z urlopu - ikonka na Tablicy
+// mechanikow. Dopoki flaga jest ustawiona:
+//   - nie mozna przydzielic tej osobie nowej roboty (patrz PUT /api/jobs/:id/assign),
+//   - zadania "po naprawie" (Wyposazenie+Inspecto / Mycie) reczne przypisane
+//     do niej trafiaja zamiast tego do mechanika, ktory zakonczyl dana robote
+//     (patrz backend/routes/followup.js).
+// Celowo NIE ma tu 'kierownik' wsrod dozwolonych rol - o urlopie decyduje
+// tylko superadmin/szef, tak jak w tresci wymagania.
+router.put('/:id/urlop', requireRole('superadmin', 'szef'), async (req, res) => {
+  const { naUrlopie } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE users SET na_urlopie = $1 WHERE id = $2
+       RETURNING id AS "Id", full_name AS "FullName", na_urlopie AS "NaUrlopie"`,
+      [!!naUrlopie, req.params.id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Nie znaleziono użytkownika.' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Błąd serwera podczas zapisywania statusu urlopu.' });
   }
 });
 
