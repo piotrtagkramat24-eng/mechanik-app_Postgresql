@@ -243,6 +243,17 @@ router.put('/:id/assign', async (req, res) => {
   }
 
   try {
+    // Osobie oznaczonej jako "na urlopie" (patrz PUT /api/users/:id/urlop) nie
+    // mozna przydzielic nowej roboty - ani z zakladki "Do przydzielenia", ani
+    // przez przeciagniecie/zmiane mechanika na Tablicy mechanikow.
+    const mech = await pool.query('SELECT na_urlopie AS "NaUrlopie" FROM users WHERE id = $1', [mechanikId]);
+    if (mech.rows.length === 0) {
+      return res.status(404).json({ error: 'Nie znaleziono mechanika.' });
+    }
+    if (mech.rows[0].NaUrlopie) {
+      return res.status(400).json({ error: 'Nie można przydzielić zadania - ta osoba jest na urlopie.' });
+    }
+
     await pool.query(
       `UPDATE jobs
        SET mechanik_id = $1,
@@ -271,7 +282,7 @@ async function obsluzZakonczenieRoboty(job) {
   if (!job) return;
   let przypisaniaPoNaprawie = [];
   try {
-    przypisaniaPoNaprawie = await utworzZadaniaPoNaprawie(pool, job.Id);
+    przypisaniaPoNaprawie = await utworzZadaniaPoNaprawie(pool, job);
   } catch (e) {
     console.error('[ZadaniaPoNaprawie] Blad tworzenia:', e.message);
   }

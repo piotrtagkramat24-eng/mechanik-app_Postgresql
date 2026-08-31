@@ -50,10 +50,23 @@ CREATE TABLE IF NOT EXISTS users (
     godz_sob_do             VARCHAR(5) NULL DEFAULT '14:00',
     godz_sob_przerwa_od     VARCHAR(5) NULL DEFAULT NULL,
     godz_sob_przerwa_min    INT NOT NULL DEFAULT 0,
+    -- Urlop (v21) - superadmin/szef moga oznaczyc mechanika (albo kierownika,
+    -- ktory tez pracuje jako mechanik) jako "na urlopie" ikonka na Tablicy
+    -- mechanikow. Dopoki flaga jest ustawiona, nie mozna przydzielic tej
+    -- osobie nowej roboty (patrz PUT /api/jobs/:id/assign), a zadania "po
+    -- naprawie" (Wyposazenie+Inspecto / Mycie) reczne przypisane do niej trafiaja
+    -- zamiast tego do mechanika, ktory wlasnie zakonczyl dana robote
+    -- (patrz backend/routes/followup.js).
+    na_urlopie              BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT ck_users_role CHECK (
         role IN ('szef', 'kierownik', 'mechanik', 'pracownik_gospodarczy', 'administrator', 'superadmin')
     )
 );
+
+-- MIGRACJA (v21): dodaje kolumne na_urlopie do juz istniejacej tabeli users,
+-- jesli baza zostala utworzona wczesniejsza wersja tego skryptu. Bezpieczne
+-- do wielokrotnego uruchamiania.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS na_urlopie BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ============================================================
 -- 2. TABELA: cars (samochody i naczepy przyjete do warsztatu)

@@ -225,7 +225,9 @@ export default function UstawieniaPanel() {
           Gdy mechanik zakończy robotę, pojazd jest mechanicznie gotowy, ale zostaje jeszcze do zrobienia:
           Wyposażenie + Inspecto (jedno zadanie) oraz Mycie. Dla każdego z tych zadań wybierz osobę, która
           ma je wykonywać — każde zadanie możesz przypisać do innej osoby. Jeśli dla jakiegoś zadania nie
-          wybierzesz nikogo, zadanie to nie zostanie w ogóle utworzone po zakończeniu roboty.
+          wybierzesz nikogo, zadanie to nie zostanie w ogóle utworzone po zakończeniu roboty. Jeśli wybrana
+          osoba jest akurat na urlopie (🏖️ na Tablicy mechaników), zadanie trafi zamiast niej do mechanika,
+          który zakończył daną robotę.
         </p>
         <div className="ustawienia-przypisania-list">
           {mechanicyIKierownicy.length === 0 && <p>Brak kont z rolą „mechanik” lub „kierownik” w systemie.</p>}
@@ -238,7 +240,7 @@ export default function UstawieniaPanel() {
               >
                 <option value="">— nikt (nie twórz zadania) —</option>
                 {mechanicyIKierownicy.map(u => (
-                  <option key={u.Id} value={u.Id}>{u.FullName}</option>
+                  <option key={u.Id} value={u.Id}>{u.FullName}{u.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}</option>
                 ))}
               </select>
             </div>

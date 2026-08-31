@@ -13,7 +13,8 @@ const TYP_LABELS = { wyposazenie: 'Wyposażenie + Inspecto', mycie: 'Mycie' };
 // dla danego typu nikogo jeszcze nie przypisano (UserId wtedy = null).
 async function pobierzPrzypisania(pool) {
   const wynik = await pool.query(`
-    SELECT t.typ AS "Typ", u.id AS "Id", u.full_name AS "FullName", u.email AS "Email"
+    SELECT t.typ AS "Typ", u.id AS "Id", u.full_name AS "FullName", u.email AS "Email",
+           u.na_urlopie AS "NaUrlopie"
     FROM unnest($1::varchar[]) AS t(typ)
     LEFT JOIN dalsze_kroki_przypisania dkp ON dkp.typ = t.typ
     LEFT JOIN users u ON u.id = dkp.user_id
@@ -25,18 +26,43 @@ async function pobierzPrzypisania(pool) {
 // roboty, wg recznego przypisania kazdego typu do konkretnej osoby (patrz
 // dalsze_kroki_przypisania i PUT /api/followup/przypisania). Typy bez
 // przypisanej osoby sa pomijane - nie tworzy sie dla nich zadanie.
+//
+// Urlop: jesli osoba reczne przypisana do danego typu jest oznaczona jako
+// "na urlopie" (patrz PUT /api/users/:id/urlop), zadanie NIE trafia do niej,
+// tylko do mechanika, ktory wlasnie zakonczyl te robote (job.MechanikId) -
+// pod warunkiem, ze robota w ogole miala przypisanego mechanika. Jesli robota
+// nie miala mechanika (nie powinno sie zdarzac dla zakonczonej roboty), jako
+// zabezpieczenie zadanie i tak trafia do pierwotnie przypisanej osoby, mimo
+// urlopu, zeby zadanie nie "zniknelo" bez adresata.
+//
+// Przyjmuje caly obiekt `job` (a nie tylko jobId), bo potrzebuje danych
+// mechanika, ktory zakonczyl robote (Id/FullName/Email) - patrz SELECT_JOBS
+// w backend/routes/jobs.js.
 // Zwraca liste utworzonych przypisan [{ typ, userId, fullName, email }].
-async function utworzZadaniaPoNaprawie(pool, jobId) {
+async function utworzZadaniaPoNaprawie(pool, job) {
+  const jobId = job.Id;
+  const wykonawcaId = job.MechanikId || null;
   const przypisania = await pobierzPrzypisania(pool);
   const utworzone = [];
 
   for (const p of przypisania) {
     if (!p.Id) continue; // nikt nie przypisany do tego typu - pomijamy
+
+    let odbiorcaId = p.Id;
+    let odbiorcaFullName = p.FullName;
+    let odbiorcaEmail = p.Email;
+
+    if (p.NaUrlopie && wykonawcaId) {
+      odbiorcaId = wykonawcaId;
+      odbiorcaFullName = job.MechanikFullName;
+      odbiorcaEmail = job.MechanikEmail;
+    }
+
     await pool.query(
       `INSERT INTO zadania_po_naprawie (job_id, typ, user_id) VALUES ($1, $2, $3)`,
-      [jobId, p.Typ, p.Id]
+      [jobId, p.Typ, odbiorcaId]
     );
-    utworzone.push({ typ: p.Typ, userId: p.Id, fullName: p.FullName, email: p.Email });
+    utworzone.push({ typ: p.Typ, userId: odbiorcaId, fullName: odbiorcaFullName, email: odbiorcaEmail });
   }
   return utworzone;
 }
