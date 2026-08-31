@@ -359,54 +359,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
             />
           </div>
 
-          {/* Zakończone — zwijane przez React state */}
-          {doneJobs.length > 0 && (
-            <div className="kb-done-section">
-              <button
-                className="kb-done-summary"
-                onClick={() => setDoneOpen(o => !o)}
-              >
-                <span className={`kb-done-arrow ${doneOpen ? 'kb-done-arrow--open' : ''}`}>▸</span>
-                {'\u2713'} Zakończone ({doneJobs.length})
-              </button>
-              {doneOpen && (
-                <div className="kb-done-list">
-                  {doneJobs.map(job => (
-                    <div key={job.Id} className="kb-card kb-card--done">
-                      <div className="kb-card-body">
-                        <div className="kb-card-title">
-                          {job.Marka} {job.Model}
-                          <span className="kb-card-reg">{job.Rejestracja}</span>
-                          {job.DataZakonczenia && (
-                            <span className="kb-done-date">
-                              {new Date(job.DataZakonczenia).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
-                            </span>
-                          )}
-                        </div>
-                        <div className="kb-card-opis kb-card-opis--done">{job.Opis}</div>
-                        <ElapsedTimeBar job={job} />
-                        <PoNaprawieStatusBadges jobId={job.Id} statusPoNaprawiePerJob={statusPoNaprawiePerJob} />
-                        {job.OpisWykonania && (
-                          <div className="kb-card-wykonanie">
-                            <span className="kb-card-wykonanie-label">📝 Do zgłoszenia:</span> {job.OpisWykonania}
-                          </div>
-                        )}
-                        {job.MaZdjecie ? <JobZdjecie jobId={job.Id} /> : null}
-                        {onDelete && (
-                          <button
-                            className="btn btn-secondary btn-small kb-done-delete"
-                            onClick={() => { if (window.confirm('Czy na pewno chcesz usunąć tę robotę? Tej operacji nie można cofnąć.')) onDelete(job.Id); }}
-                          >
-                            🗑️ Usuń
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          
         </>
       )}
 
