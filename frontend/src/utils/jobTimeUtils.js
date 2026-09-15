@@ -1,11 +1,11 @@
 // Pomocnicze funkcje do wyswietlania szacowanego czasu wykonania roboty
 // oraz paska uplywu czasu od rozpoczecia pracy przez mechanika.
 
-// Formatuje czasy z tabeli PredefiniowanePrace / Jobs (godziny, np. 1.5) na czytelny napis "~1h 30min (1h–2h)"
+// Formatuje czasy z tabeli PredefiniowanePrace / Jobs (godziny, np. 1.5) na czytelny napis
+// pokazujacy TYLKO najkrotszy szacowany czas, np. "1h" (bez widelek min-max).
 export function formatCzasSzacowany(job) {
   const min = job?.CzasSzacowanyMin;
   const sredni = job?.CzasSzacowanySredni;
-  const max = job?.CzasSzacowanyMax;
   if (sredni == null) return '';
 
   const fmtH = (h) => {
@@ -18,10 +18,7 @@ export function formatCzasSzacowany(job) {
   };
 
   const minVal = min != null ? min : sredni;
-  const maxVal = max != null ? max : sredni;
-
-  if (minVal === maxVal) return `~${fmtH(sredni)}`;
-  return `~${fmtH(sredni)} (${fmtH(minVal)}–${fmtH(maxVal)})`;
+  return `~${fmtH(minVal)}`;
 }
 
 // Formatuje dowolna liczbe godzin (np. z odejmowania dat) na "1h 20min"
