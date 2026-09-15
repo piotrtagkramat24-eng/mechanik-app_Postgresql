@@ -198,6 +198,14 @@ body {
   max-width: 560px;
 }
 
+/* Przycisk submit na koncu formularza (bezposrednie dziecko .form, bez
+   opakowania w .form-actions-row) nie ma sam z siebie zadnej szerokosci -
+   bez tego flex (align-items: stretch domyslnie) rozciagalby go na cala
+   szerokosc formularza, z tekstem przyklejonym do lewej krawedzi. */
+.form > .btn {
+  align-self: flex-start;
+}
+
 .form label,
 .form .field {
   display: flex;
