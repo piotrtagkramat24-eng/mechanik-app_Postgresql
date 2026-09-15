@@ -11,7 +11,7 @@
 
   --text:          #1c2333;
   --text-2:        #4a5568;
-  --text-3:        #8e99b0;
+  --text-3:        #6b7280;
 
   --accent:        #3b72f6;
   --accent-light:  #ebf0ff;
@@ -81,14 +81,6 @@ body {
 .app-header h1::before {
   content: '🔧';
   font-size: 18px;
-}
-
-.app-header-role {
-  font-size: 11px;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  margin-top: 1px;
 }
 
 .app-header-user {
@@ -169,6 +161,18 @@ body {
 }
 
 .btn:active { transform: translateY(1px); }
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+.btn:disabled:hover { background-color: inherit; }
+.btn-primary:disabled:hover { background: var(--accent); box-shadow: none; }
+.btn-success:disabled:hover { background: var(--green); box-shadow: none; }
+.btn-danger:disabled:hover { background: var(--red); }
+.btn-secondary:disabled:hover { background: var(--surface-3); border-color: var(--border); }
 
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-dark); box-shadow: 0 3px 10px rgba(59,114,246,.35); }
