@@ -2870,6 +2870,22 @@ body {
 .raporty-odchylenie-minus { color: var(--green); font-weight: 700; }
 
 .raporty-detail-row td { padding: 0; background: var(--surface-2); }
+.raporty-detail-chart-wrap { padding: 14px 16px 4px; }
+.raporty-detail-chart-title { font-size: 12.5px; font-weight: 700; color: var(--text-2); margin-bottom: 4px; }
+
+.raporty-chart-tooltip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  max-width: 220px;
+}
+.raporty-chart-tooltip-title { font-weight: 700; margin-bottom: 2px; }
+.raporty-chart-tooltip-sub { color: var(--text-3); font-size: 11px; margin-bottom: 4px; }
+
 .raporty-detail-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .raporty-detail-table th {
   text-align: left;

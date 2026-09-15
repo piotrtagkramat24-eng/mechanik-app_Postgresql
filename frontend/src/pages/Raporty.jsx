@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { api } from '../api.js';
 import { formatGodziny } from '../utils/jobTimeUtils.js';
@@ -107,6 +107,48 @@ function parseRejestracjeWykonania(w) {
     } catch { /* brak danych */ }
   }
   return [];
+}
+
+// Zlecenia JEDNEGO mechanika w chronologicznej kolejnosci zakonczenia -
+// czas rzeczywisty i szacowany obok siebie, zeby na wykresie od razu bylo
+// widac PRZY KTORYM zleceniu czas rzeczywisty odbiegal od szacowanego
+// (a nie tylko sama suma/srednia za caly okres).
+function daneZlecenMechanika(wiersze, mechanikId) {
+  return wiersze
+    .filter((w) => w.MechanikId === mechanikId)
+    .slice()
+    .sort((a, b) => new Date(a.DataZakonczenia) - new Date(b.DataZakonczenia))
+    .map((w, i) => {
+      const rzeczywisty = w.CzasRzeczywistyGodziny != null ? Number(Number(w.CzasRzeczywistyGodziny).toFixed(2)) : null;
+      const szacowany = w.CzasSzacowanySredni != null ? Number(Number(w.CzasSzacowanySredni).toFixed(2)) : null;
+      return {
+        indeks: i + 1,
+        etykieta: formatDataGodzina(w.DataZakonczenia),
+        nazwa: w.Nazwa,
+        pojazd: `${w.Marka} ${w.Model} · ${w.Rejestracja}`,
+        rzeczywisty,
+        szacowany,
+        odchylenie: (rzeczywisty != null && szacowany != null) ? Number((rzeczywisty - szacowany).toFixed(2)) : null,
+      };
+    });
+}
+
+function MechanikZlecenieTooltip({ active, payload }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="raporty-chart-tooltip">
+      <div className="raporty-chart-tooltip-title">{d.nazwa}</div>
+      <div className="raporty-chart-tooltip-sub">{d.pojazd} · {d.etykieta}</div>
+      <div>Czas rzeczywisty: <strong>{d.rzeczywisty != null ? `${d.rzeczywisty} h` : '—'}</strong></div>
+      <div>Czas szacowany: <strong>{d.szacowany != null ? `${d.szacowany} h` : '—'}</strong></div>
+      {d.odchylenie != null && (
+        <div className={d.odchylenie > 0 ? 'raporty-odchylenie-plus' : 'raporty-odchylenie-minus'}>
+          Odchylenie: {d.odchylenie > 0 ? '+' : ''}{d.odchylenie} h
+        </div>
+      )}
+    </div>
+  );
 }
 
 function agregujGospodarczy(wiersze) {
@@ -457,34 +499,63 @@ export default function Raporty() {
                                 ) : '—'}
                               </td>
                             </tr>
-                            {rozwinieta === a.id && (
-                              <tr className="raporty-detail-row">
-                                <td colSpan={5}>
-                                  <table className="raporty-detail-table">
-                                    <thead>
-                                      <tr>
-                                        <th>Pojazd</th>
-                                        <th>Czynność</th>
-                                        <th>Zakończono</th>
-                                        <th>Czas rzeczywisty</th>
-                                        <th>Czas szacowany</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {wierszeMechanicy.filter((w) => w.MechanikId === a.id).map((w) => (
-                                        <tr key={w.CzynnoscId}>
-                                          <td>{w.Marka} {w.Model} · {w.Rejestracja}</td>
-                                          <td>{w.Nazwa}</td>
-                                          <td>{formatDataGodzina(w.DataZakonczenia)}</td>
-                                          <td>{w.CzasRzeczywistyGodziny != null ? formatGodziny(w.CzasRzeczywistyGodziny) : '—'}</td>
-                                          <td>{w.CzasSzacowanySredni != null ? formatGodziny(w.CzasSzacowanySredni) : '—'}</td>
+                            {rozwinieta === a.id && (() => {
+                              const daneZlecen = daneZlecenMechanika(wierszeMechanicy, a.id);
+                              return (
+                                <tr className="raporty-detail-row">
+                                  <td colSpan={5}>
+                                    <div className="raporty-detail-chart-wrap">
+                                      <div className="raporty-detail-chart-title">Zlecenia w czasie — {a.nazwa}</div>
+                                      <ResponsiveContainer width="100%" height={180}>
+                                        <LineChart data={daneZlecen} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                          <XAxis dataKey="indeks" tick={{ fontSize: 11 }} tickFormatter={(v) => `#${v}`} />
+                                          <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}h`} width={40} />
+                                          <Tooltip content={<MechanikZlecenieTooltip />} />
+                                          <Legend />
+                                          <Line type="monotone" dataKey="rzeczywisty" name="Czas rzeczywisty (h)" stroke="#3b72f6" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                                          <Line type="monotone" dataKey="szacowany" name="Czas szacowany (h)" stroke="#e08c00" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} connectNulls />
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                    <table className="raporty-detail-table">
+                                      <thead>
+                                        <tr>
+                                          <th>Pojazd</th>
+                                          <th>Czynność</th>
+                                          <th>Zakończono</th>
+                                          <th>Czas rzeczywisty</th>
+                                          <th>Czas szacowany</th>
+                                          <th>Odchylenie</th>
                                         </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </td>
-                              </tr>
-                            )}
+                                      </thead>
+                                      <tbody>
+                                        {wierszeMechanicy.filter((w) => w.MechanikId === a.id).map((w) => {
+                                          const maOba = w.CzasRzeczywistyGodziny != null && w.CzasSzacowanySredni != null;
+                                          const roznicaZlecenia = maOba ? Number(w.CzasRzeczywistyGodziny) - Number(w.CzasSzacowanySredni) : null;
+                                          return (
+                                            <tr key={w.CzynnoscId}>
+                                              <td>{w.Marka} {w.Model} · {w.Rejestracja}</td>
+                                              <td>{w.Nazwa}</td>
+                                              <td>{formatDataGodzina(w.DataZakonczenia)}</td>
+                                              <td>{w.CzasRzeczywistyGodziny != null ? formatGodziny(w.CzasRzeczywistyGodziny) : '—'}</td>
+                                              <td>{w.CzasSzacowanySredni != null ? formatGodziny(w.CzasSzacowanySredni) : '—'}</td>
+                                              <td>
+                                                {maOba ? (
+                                                  <span className={roznicaZlecenia > 0 ? 'raporty-odchylenie-plus' : 'raporty-odchylenie-minus'}>
+                                                    {roznicaZlecenia > 0 ? '+' : ''}{formatGodziny(roznicaZlecenia)}
+                                                  </span>
+                                                ) : '—'}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              );
+                            })()}
                           </React.Fragment>
                         );
                       })}
