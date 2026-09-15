@@ -2767,7 +2767,7 @@ body {
    Raporty (szef / superadmin) — zestawienia pracy mechanikow
    i pracownika gospodarczego w wybranym okresie.
    ============================================================ */
-.page-title { font-size: 20px; font-weight: 800; margin: 0 0 4px; letter-spacing: -.2px; }
+.page-title { font-size: 22px; font-weight: 800; margin: 0 0 4px; letter-spacing: -.3px; }
 .page-subtitle { font-size: 13.5px; color: var(--text-2); margin: 0 0 16px; }
 
 .raporty-toolbar {
@@ -2775,10 +2775,12 @@ body {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 14px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border-radius: var(--radius);
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 .raporty-date-field {
   display: flex;
@@ -2788,9 +2790,54 @@ body {
   font-weight: 600;
   color: var(--text-2);
 }
-.raporty-date-field input { padding: 6px 8px; }
-.raporty-quick-ranges { display: flex; gap: 6px; margin-left: auto; }
+.raporty-date-field input { padding: 7px 9px; }
+
+/* Segmentowany przelacznik szybkich zakresow (7/30/90 dni) - jedna
+   pigulka z podswietlonym aktywnym segmentem, zamiast osobnych przyciskow. */
+.raporty-segmented {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 3px;
+}
+.raporty-segmented-btn {
+  border: none;
+  background: none;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.raporty-segmented-btn:hover { color: var(--text); }
+.raporty-segmented-btn--active { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(59,114,246,.35); }
+
 .raporty-loading { color: var(--text-2); font-size: 13px; padding: 12px 0; }
+.raporty-empty { color: var(--text-2); font-size: 13.5px; margin: 0; padding: 8px 0; }
+
+/* KPI karty — szybkie podsumowanie okresu nad wykresami/tabela. */
+.raporty-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.raporty-kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+}
+.raporty-kpi-value { font-size: 24px; font-weight: 800; letter-spacing: -.4px; color: var(--text); line-height: 1.2; }
+.raporty-kpi-label { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.raporty-kpi-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.raporty-kpi-card--red .raporty-kpi-value { color: var(--red); }
+.raporty-kpi-card--green .raporty-kpi-value { color: var(--green); }
 
 .raporty-panel { margin-top: 12px; }
 .raporty-panel-header {
@@ -2816,8 +2863,9 @@ body {
   border-bottom: 2px solid var(--border);
 }
 .raporty-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.raporty-table tbody tr:nth-child(even):not(.raporty-detail-row) { background: var(--surface-2); }
 .raporty-row-clickable { cursor: pointer; }
-.raporty-row-clickable:hover { background: var(--surface-2); }
+.raporty-row-clickable:hover { background: var(--accent-light); }
 .raporty-odchylenie-plus { color: var(--red); font-weight: 700; }
 .raporty-odchylenie-minus { color: var(--green); font-weight: 700; }
 
@@ -2834,4 +2882,10 @@ body {
 .raporty-detail-table td { padding: 6px 16px; color: var(--text-2); border-bottom: 1px solid var(--border); }
 .raporty-detail-table tr:last-child td { border-bottom: none; }
 .raporty-rejestracje-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+@media (max-width: 700px) {
+  .raporty-toolbar { flex-direction: column; align-items: stretch; }
+  .raporty-segmented { margin-left: 0; }
+  .raporty-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
