@@ -34,9 +34,25 @@
   --shadow-sm:     0 1px 4px rgba(28,35,51,.08), 0 2px 8px rgba(28,35,51,.04);
   --shadow-md:     0 4px 16px rgba(28,35,51,.10), 0 2px 6px rgba(28,35,51,.05);
   --shadow-lg:     0 8px 32px rgba(28,35,51,.12), 0 4px 12px rgba(28,35,51,.06);
+
+  /* Wlasna strzalka rozwijania dla <select>, zeby zastapic natywna z
+     przegladarki (rozne na kazdym systemie/przegladarce). */
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 8l5 5 5-5' fill='none' stroke='%234a5568' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
+
+/* Kazdy zwykly <select> (nie dotyczy SearchableSelect, ktory nie uzywa
+   natywnego <select>) dostaje appearance:none tutaj raz, globalnie - tlo z
+   wlasna strzalka i padding pod nia sa juz doklejane osobno przy kazdym
+   konkretnym .xxx select {} nizej w tym pliku, bo skrot "background"/
+   "padding" w tamtych regulach i tak zeruje wartosci ustawione tutaj. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+select::-ms-expand { display: none; }
 
 body {
   margin: 0;
@@ -230,6 +246,12 @@ body {
   transition: border-color .15s, box-shadow .15s;
 }
 
+.form select {
+  padding-right: 34px;
+  background: var(--surface) var(--select-arrow) no-repeat right 12px center / 12px;
+  cursor: pointer;
+}
+
 .form input:focus,
 .form select:focus,
 .form textarea:focus {
@@ -320,6 +342,12 @@ body {
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
+  cursor: pointer;
+}
+.radio-option input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -543,11 +571,11 @@ body {
 }
 
 .job-card-actions select {
-  padding: 6px 10px;
+  padding: 6px 30px 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 13px;
-  background: var(--surface);
+  background: var(--surface) var(--select-arrow) no-repeat right 10px center / 11px;
   color: var(--text);
   cursor: pointer;
 }
@@ -671,6 +699,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
+}
+.kb-done-filters select {
+  padding-right: 28px;
+  background: var(--surface) var(--select-arrow) no-repeat right 8px center / 11px;
+  cursor: pointer;
 }
 .kb-done-filters-hint { color: var(--text-3); font-style: italic; }
 
@@ -1219,11 +1252,11 @@ body {
 }
 
 .gosp-filter-select select {
-  padding: 7px 10px;
+  padding: 7px 30px 7px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 13px;
-  background: var(--surface);
+  background: var(--surface) var(--select-arrow) no-repeat right 10px center / 12px;
   color: var(--text);
   cursor: pointer;
   transition: border-color .15s;
@@ -2686,7 +2719,18 @@ body {
 .ustawienia-email-row input { flex: 1; min-width: 200px; }
 .ustawienia-email-name { min-width: 140px; font-weight: 600; font-size: 13px; }
 .ustawienia-przypisania-list { display: flex; flex-direction: column; gap: 8px; }
-.ustawienia-przypisania-list .ustawienia-email-row select { flex: 1; min-width: 200px; }
+.ustawienia-przypisania-list .ustawienia-email-row select {
+  flex: 1;
+  min-width: 200px;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface) var(--select-arrow) no-repeat right 10px center / 12px;
+  cursor: pointer;
+}
 .ustawienia-checkbox-list { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 6px; }
 .ustawienia-rola { color: var(--text-3); font-weight: 500; }
 .ustawienia-typ-block { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
