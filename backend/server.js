@@ -25,6 +25,17 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '15mb' })); // limit podniesiony ze wzgledu na zdjecia (base64) dolaczane do zlecen
 
+// Bez tego nagłówka odpowiedzi GET /api/... (np. lista zlecen mechanika,
+// pollowana co kilka sekund) nie maja ZADNEJ dyrektywy cache - posrednie
+// proxy (np. operatora komorkowego) albo sama przegladarka moga wtedy
+// serwowac STARA odpowiedz z pamieci podrecznej zamiast pytac serwer,
+// przez co np. edycja zlecenia przez szefa/kierownika "nie pojawia sie"
+// u mechanika mimo ze w bazie juz jest zaktualizowana.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // /api/auth (login) zostaje PUBLICZNE - to jedyny endpoint API dostepny bez
 // tokenu (inaczej nikt nie moglby sie w ogole zalogowac). Wszystkie pozostale
 // endpointy ponizej wymagaja juz naglowka "Authorization: Bearer <token>"
