@@ -17,6 +17,12 @@ function getToken() {
 async function request(path, options = {}) {
   const token = getToken();
   const res = await fetch(BASE + path, {
+    // Backend juz odsyla Cache-Control: no-store (patrz server.js), ale ta
+    // flaga dodatkowo wylacza TAKZE wlasna pamiec podreczna przegladarki
+    // (nie tylko posredniczace proxy) - bez niej np. telefon ze slabym
+    // zasiegiem potrafi "oszczednie" oddac stara, zapamietana odpowiedz
+    // zamiast jeszcze raz zapytac serwer.
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
