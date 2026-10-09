@@ -46,28 +46,34 @@ function kluczLoginu(username) {
   return String(username || '').trim().toLowerCase();
 }
 
-function opoznienieDlaLoginu(username) {
-  const wpis = bledneProbyLoginu.get(kluczLoginu(username));
-  if (!wpis || Date.now() - wpis.ostatniaProba > OKNO_RESETU_PROB_MS) return 0;
-  return Math.min(wpis.liczba * OPOZNIENIE_NA_PROBE_MS, MAX_OPOZNIENIE_MS);
-}
-
-function zarejestrujBlednaProbeLoginu(username) {
+// REZERWUJE kolejna probe (podbija licznik) I OD RAZU zwraca opoznienie do
+// zastosowania - wszystko W JEDNEJ synchronicznej funkcji (bez "await" w
+// srodku). To wazne: gdyby odczyt licznika i jego podbicie byly osobnymi
+// krokami rozdzielonymi jakimkolwiek "await" (tak jak w pierwszej wersji
+// tego pliku), atakujacy wysylajacy wiele ROWNOLEGLYCH (nie sekwencyjnych)
+// requestow na ten sam login omijalby opoznienie - wszystkie "widzialyby"
+// ten sam, jeszcze nie podbity stan licznika w momencie startu. Poniewaz
+// JS w jednym procesie Node wykonuje kod synchroniczny bez przerwan, ta
+// funkcja dziala jak sekcja krytyczna: kolejne rownolegle requesty i tak
+// "staja w kolejce" do niej jedna po drugim, wiec kazdy nastepny faktycznie
+// widzi juz podbity licznik poprzedniego.
+function rezerwujProbeIObliczOpoznienie(username) {
   const klucz = kluczLoginu(username);
+  const teraz = Date.now();
   const wpis = bledneProbyLoginu.get(klucz);
-  if (!wpis || Date.now() - wpis.ostatniaProba > OKNO_RESETU_PROB_MS) {
+  const swiezy = wpis && teraz - wpis.ostatniaProba <= OKNO_RESETU_PROB_MS;
+  const liczbaPoprzednich = swiezy ? wpis.liczba : 0;
+
+  if (!swiezy && bledneProbyLoginu.size >= MAX_SLEDZONYCH_LOGINOW) {
     // Mapa rosnie o jeden wpis na kazdy PROBOWANY login (takze nieistniejacy) -
-    // przy bardzo duzej liczbie roznych prob czyscimy najstarsze wpisy,
+    // przy bardzo duzej liczbie roznych prob czyscimy najstarszy wpis,
     // zeby nie rosla bez ograniczen.
-    if (bledneProbyLoginu.size >= MAX_SLEDZONYCH_LOGINOW) {
-      const najstarszyKlucz = bledneProbyLoginu.keys().next().value;
-      bledneProbyLoginu.delete(najstarszyKlucz);
-    }
-    bledneProbyLoginu.set(klucz, { liczba: 1, ostatniaProba: Date.now() });
-  } else {
-    wpis.liczba += 1;
-    wpis.ostatniaProba = Date.now();
+    const najstarszyKlucz = bledneProbyLoginu.keys().next().value;
+    bledneProbyLoginu.delete(najstarszyKlucz);
   }
+  bledneProbyLoginu.set(klucz, { liczba: liczbaPoprzednich + 1, ostatniaProba: teraz });
+
+  return Math.min(liczbaPoprzednich * OPOZNIENIE_NA_PROBE_MS, MAX_OPOZNIENIE_MS);
 }
 
 function wyczyscProbyLoginu(username) {
@@ -91,7 +97,7 @@ router.post('/login', limiterLogowaniaPoIp, async (req, res) => {
     return res.status(400).json({ error: 'Podaj login i hasło.' });
   }
 
-  const opoznienie = opoznienieDlaLoginu(username);
+  const opoznienie = rezerwujProbeIObliczOpoznienie(username);
   if (opoznienie > 0) await poczekaj(opoznienie);
 
   try {
@@ -103,8 +109,9 @@ router.post('/login', limiterLogowaniaPoIp, async (req, res) => {
 
     // Celowo ten sam, ogolny komunikat bledu dla "brak uzytkownika" i "zle haslo"
     // - nie ujawniamy atakujacemu, czy dany login w ogole istnieje w systemie.
+    // Proba zostala juz zarejestrowana wyzej (rezerwujProbeIObliczOpoznienie),
+    // wiec tu nic dodatkowo nie trzeba podbijac.
     if (result.rows.length === 0) {
-      zarejestrujBlednaProbeLoginu(username);
       return res.status(401).json({ error: 'Nieprawidłowy login lub hasło.' });
     }
 
@@ -112,7 +119,6 @@ router.post('/login', limiterLogowaniaPoIp, async (req, res) => {
     const haslaZgodne = await bcrypt.compare(password, user.password);
 
     if (!haslaZgodne) {
-      zarejestrujBlednaProbeLoginu(username);
       return res.status(401).json({ error: 'Nieprawidłowy login lub hasło.' });
     }
 
