@@ -41,8 +41,10 @@ export default function GospodarczyModule({ user }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  const pollPaused = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (pollPaused.current) return;
     try {
       const [tasksData, pracownicyData, carsData] = await Promise.all([
         api.getGospodarczeZadania(),
@@ -93,7 +95,11 @@ export default function GospodarczyModule({ user }) {
     const dstIdx = aktywne.findIndex(t => t.Id === targetId);
     if (srcIdx === -1 || dstIdx === -1) { setDraggingId(null); setDropTargetId(null); return; }
 
-    // Wykonaj tyle 'up' lub 'down' ile potrzeba (seryjnie)
+    // Wykonaj tyle 'up' lub 'down' ile potrzeba (seryjnie) - pollowanie
+    // wstrzymane na czas tej serii, zeby odswiezenie "w polowie" nie
+    // nadpisalo stanu listy i nie spowodowalo migotania w trakcie przeciagania
+    // (patrz analogiczny pollPaused w Manager.jsx).
+    pollPaused.current = true;
     const steps = dstIdx - srcIdx;
     const direction = steps > 0 ? 'down' : 'up';
     const count = Math.abs(steps);
@@ -103,6 +109,7 @@ export default function GospodarczyModule({ user }) {
       }
       await refresh();
     } catch (err) { setError(err.message); }
+    finally { pollPaused.current = false; }
     setDraggingId(null);
     setDropTargetId(null);
   }

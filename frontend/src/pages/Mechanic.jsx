@@ -131,7 +131,7 @@ export default function Mechanic({ user, embedded = false }) {
 
   useEffect(() => {
     refresh();
-    api.getPredefiniowanePrace().then(setPredefiniowane).catch(() => {});
+    api.getPredefiniowanePrace().then(setPredefiniowane).catch((err) => setError(err.message));
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refresh]);

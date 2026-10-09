@@ -31,10 +31,13 @@ function isWeekend(date) {
   return d === 0 || d === 6;
 }
 
+// Te same kolory co .priority-wysoki/sredni/niski w index.css (zmienne
+// --red/--amber/--green), zeby priorytet wygladal identycznie w kalendarzu
+// i na znaczkach priorytetu gdzie indziej w aplikacji.
 const PRIORITY_COLOR = {
-  wysoki: '#dc2626',
-  sredni: '#d97706',
-  niski:  '#16a34a',
+  wysoki: 'var(--red)',
+  sredni: 'var(--amber)',
+  niski:  'var(--green)',
 };
 
 function getPriorityKey(p) {
@@ -320,9 +323,9 @@ export default function GospodarczyCalendar({ tasks, showPracownik = false }) {
 
       {/* Legenda */}
       <div className="cal-legend">
-        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'#dc2626'}} />Wysoki</span>
-        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'#d97706'}} />Średni</span>
-        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'#16a34a'}} />Niski</span>
+        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'var(--red)'}} />Wysoki</span>
+        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'var(--amber)'}} />Średni</span>
+        <span className="cal-legend-item"><span className="cal-legend-dot" style={{background:'var(--green)'}} />Niski</span>
         {showPracownik && <span className="cal-legend-note">Kliknij zadanie, aby zobaczyć szczegóły</span>}
       </div>
     </div>
