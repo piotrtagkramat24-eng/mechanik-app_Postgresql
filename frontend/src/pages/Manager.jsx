@@ -203,7 +203,6 @@ function PoNaprawieCard({ zadanie, onDelete }) {
 function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete, onDeletePoNaprawie, canManageUrlop = false, onToggleUrlop }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
-  const [doneOpen, setDoneOpen] = useState(false);
   const columnRef = useRef(null);
 
   // W trybie "wszystkie" dzielimy na aktywne (z drag&drop + kolejnoscia) i zwijana
@@ -269,7 +268,7 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
     onDropJob(jobId, fromMechanikId, mechanik.Id, activeJobs.length, activeJobs);
   }
 
-  const initials = mechanik.FullName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const initials = (mechanik.FullName || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
     <div
@@ -900,7 +899,7 @@ export default function Manager({
               />
             ))}
             {mechanicy.length === 0 && (
-              <p style={{ padding: 24, color: '#888' }}>Brak mechaników w systemie.</p>
+              <p style={{ padding: 24, color: 'var(--text-3)' }}>Brak mechaników w systemie.</p>
             )}
           </div>
         </div>
