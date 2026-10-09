@@ -3,6 +3,14 @@ const router = express.Router();
 const { pool } = require('../db');
 const { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow } = require('../mail');
 const { utworzZadaniaPoNaprawie, TYP_LABELS } = require('./followup');
+const { requireRole } = require('../middleware/auth');
+
+// Zarzadzanie kolejka/przydzialem robot (tworzenie, przydzielanie, usuwanie,
+// zmiana priorytetu, edycja opisu) jest dostepne tylko dla rol zarzadzajacych
+// warsztatem - mechanik/pracownik_gospodarczy nie maja do tego zadnej zakladki
+// w UI, ale bez tej kontroli na backendzie mogliby wywolac te endpointy
+// bezposrednio (np. z devtools) mimo to.
+const ZARZADZA_WARSZTATEM = requireRole('szef', 'kierownik', 'superadmin');
 
 // Wspolny fragment zapytania - laczy Joby z danymi auta i mechanika,
 // zeby frontend nie musial doklejac tych danych samodzielnie.
@@ -86,7 +94,7 @@ const ORDER_BY_QUEUE = `
 `;
 
 // GET /api/jobs - wszystkie roboty (widok szefa i kierownika)
-router.get('/', async (req, res) => {
+router.get('/', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query(SELECT_JOBS + ORDER_BY_QUEUE);
     res.json(result.rows);
@@ -111,12 +119,16 @@ router.get('/mechanik/:id', async (req, res) => {
 });
 
 // POST /api/jobs - szef/kierownik dodaje nowa robote do istniejacego auta
-// body: { carId, userId, czynnosci: [{ predefiniowanaPracaId?, nazwa, czasMin?, czasSredni?, czasMax? }, ...] }
-router.post('/', async (req, res) => {
-  const { carId, userId, czynnosci } = req.body;
+// body: { carId, czynnosci: [{ predefiniowanaPracaId?, nazwa, czasMin?, czasSredni?, czasMax? }, ...] }
+router.post('/', ZARZADZA_WARSZTATEM, async (req, res) => {
+  const { carId, czynnosci } = req.body;
+  // Kto tworzy robote bierzemy z zweryfikowanego tokenu (req.user), NIE z
+  // body żądania - inaczej dowolny klient mógłby podać cudze userId i
+  // podszyć się pod innego uzytkownika w historii/raportach.
+  const userId = req.user.id;
 
-  if (!carId || !userId || !Array.isArray(czynnosci) || czynnosci.length === 0) {
-    return res.status(400).json({ error: 'Podaj samochód, użytkownika oraz przynajmniej jedną czynność lub opis.' });
+  if (!carId || !Array.isArray(czynnosci) || czynnosci.length === 0) {
+    return res.status(400).json({ error: 'Podaj samochód oraz przynajmniej jedną czynność lub opis.' });
   }
   for (const cz of czynnosci) {
     if (!cz || !String(cz.nazwa || '').trim()) {
@@ -172,7 +184,8 @@ router.post('/', async (req, res) => {
 
 // POST /api/jobs/:id/czynnosci - dopisz kolejna czynnosc do JUZ ISTNIEJACEGO zlecenia
 router.post('/:id/czynnosci', async (req, res) => {
-  const { predefiniowanaPracaId, nazwa, czasMin, czasSredni, czasMax, userId } = req.body;
+  const { predefiniowanaPracaId, nazwa, czasMin, czasSredni, czasMax } = req.body;
+  const userId = req.user.id;
 
   try {
     let finalNazwa = String(nazwa || '').trim();
@@ -203,7 +216,7 @@ router.post('/:id/czynnosci', async (req, res) => {
     await pool.query(
       `INSERT INTO job_czynnosci (job_id, predefiniowana_praca_id, nazwa, czas_min, czas_sredni, czas_max, dodane_przez)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.params.id, predefiniowanaPracaId || null, finalNazwa, cMin, cSredni, cMax, userId || null]
+      [req.params.id, predefiniowanaPracaId || null, finalNazwa, cMin, cSredni, cMax, userId]
     );
 
     const full = await pool.query(SELECT_JOBS + ' WHERE j.id = $1', [req.params.id]);
@@ -217,7 +230,7 @@ router.post('/:id/czynnosci', async (req, res) => {
 });
 
 // DELETE /api/jobs/:id/czynnosci/:czynnoscId - usuwa pojedyncza czynnosc ze zlecenia
-router.delete('/:id/czynnosci/:czynnoscId', async (req, res) => {
+router.delete('/:id/czynnosci/:czynnoscId', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     await pool.query('DELETE FROM job_czynnosci WHERE id = $1 AND job_id = $2', [
       req.params.czynnoscId,
@@ -235,7 +248,7 @@ router.delete('/:id/czynnosci/:czynnoscId', async (req, res) => {
 });
 
 // PUT /api/jobs/:id/assign - kierownik przydziela mechanika do roboty
-router.put('/:id/assign', async (req, res) => {
+router.put('/:id/assign', ZARZADZA_WARSZTATEM, async (req, res) => {
   const { mechanikId } = req.body;
 
   if (!mechanikId) {
@@ -307,6 +320,7 @@ router.put('/:id/status', async (req, res) => {
 
   const dataKolumna = status === 'rozpoczete' ? 'data_rozpoczecia' : 'data_zakonczenia';
 
+  const client = await pool.connect();
   try {
     let dodatkoweSet = '';
     const params = [status, req.params.id];
@@ -321,7 +335,9 @@ router.put('/:id/status', async (req, res) => {
       }
     }
 
-    await pool.query(
+    await client.query('BEGIN');
+
+    await client.query(
       `UPDATE jobs
        SET status = $1,
            ${dataKolumna} = now()${dodatkoweSet}
@@ -330,18 +346,20 @@ router.put('/:id/status', async (req, res) => {
     );
 
     if (status === 'rozpoczete') {
-      await pool.query(
+      await client.query(
         `UPDATE job_czynnosci SET status = 'rozpoczete', data_rozpoczecia = COALESCE(data_rozpoczecia, now())
          WHERE job_id = $1 AND status = 'oczekuje'`,
         [req.params.id]
       );
     } else {
-      await pool.query(
+      await client.query(
         `UPDATE job_czynnosci SET status = 'zakonczone', data_zakonczenia = COALESCE(data_zakonczenia, now())
          WHERE job_id = $1 AND status <> 'zakonczone'`,
         [req.params.id]
       );
     }
+
+    await client.query('COMMIT');
 
     const full = await pool.query(SELECT_JOBS + ' WHERE j.id = $1', [req.params.id]);
     const job = full.rows[0];
@@ -352,8 +370,11 @@ router.put('/:id/status', async (req, res) => {
 
     res.json(job);
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas zmiany statusu.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -364,33 +385,43 @@ router.put('/:id/czynnosci/:czynnoscId/status', async (req, res) => {
     return res.status(400).json({ error: 'Nieprawidłowy status czynności.' });
   }
 
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     if (status === 'rozpoczete') {
-      await pool.query(
+      await client.query(
         `UPDATE job_czynnosci
          SET status = 'rozpoczete', data_rozpoczecia = COALESCE(data_rozpoczecia, now())
          WHERE id = $1 AND job_id = $2`,
         [req.params.czynnoscId, req.params.id]
       );
-      await pool.query(
+      await client.query(
         `UPDATE jobs SET status = 'rozpoczete', data_rozpoczecia = COALESCE(data_rozpoczecia, now())
          WHERE id = $1 AND status = 'przydzielone'`,
         [req.params.id]
       );
     } else {
-      await pool.query(
+      // Blokujemy wiersz zlecenia na czas transakcji - jesli dwie czynnosci
+      // tego samego zlecenia sa konczone niemal rownoczesnie (dwa requesty),
+      // druga transakcja poczeka na pierwsza, wiec liczba "pozostalych"
+      // czynnosci ponizej zawsze odzwierciedla juz zakonczony, a nie
+      // wyscigowo nieaktualny stan.
+      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [req.params.id]);
+
+      await client.query(
         `UPDATE job_czynnosci SET status = 'zakonczone', data_zakonczenia = now()
          WHERE id = $1 AND job_id = $2`,
         [req.params.czynnoscId, req.params.id]
       );
 
-      const pozostale = await pool.query(
+      const pozostale = await client.query(
         `SELECT COUNT(*) AS c FROM job_czynnosci WHERE job_id = $1 AND status <> 'zakonczone'`,
         [req.params.id]
       );
 
       if (Number(pozostale.rows[0].c) === 0) {
-        await pool.query(
+        await client.query(
           `UPDATE jobs
            SET status = 'zakonczone', data_zakonczenia = now(),
                opis_wykonania = $1, zdjecie_wykonania = $2
@@ -399,6 +430,8 @@ router.put('/:id/czynnosci/:czynnoscId/status', async (req, res) => {
         );
       }
     }
+
+    await client.query('COMMIT');
 
     const full = await pool.query(SELECT_JOBS + ' WHERE j.id = $1', [req.params.id]);
 
@@ -411,8 +444,11 @@ router.put('/:id/czynnosci/:czynnoscId/status', async (req, res) => {
 
     res.json(job);
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas zmiany statusu czynności.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -432,7 +468,7 @@ router.get('/:id/zdjecie', async (req, res) => {
 });
 
 // PUT /api/jobs/:id - edycja krotkiego podsumowania zlecenia (Opis)
-router.put('/:id', async (req, res) => {
+router.put('/:id', ZARZADZA_WARSZTATEM, async (req, res) => {
   const { opis } = req.body;
 
   if (!opis || !opis.trim()) {
@@ -453,7 +489,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/jobs/:id - trwale usuniecie roboty
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM jobs WHERE id = $1', [req.params.id]);
 
@@ -579,7 +615,7 @@ async function wyslijPowiadomienieOZakonczeniu(pool, job) {
 }
 
 // PUT /api/jobs/:id/priority - kierownik zmienia kolejnosc wykonania roboty
-router.put('/:id/priority', async (req, res) => {
+router.put('/:id/priority', ZARZADZA_WARSZTATEM, async (req, res) => {
   const { direction } = req.body;
 
   if (direction !== 'up' && direction !== 'down') {
