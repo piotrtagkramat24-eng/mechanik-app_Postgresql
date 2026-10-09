@@ -194,8 +194,17 @@ router.get('/', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   }
 });
 
-// GET /api/gospodarcze/pracownik/:id - zadania konkretnego pracownika
-router.get('/pracownik/:id', async (req, res) => {
+// GET /api/gospodarcze/pracownik/:id - zadania konkretnego pracownika.
+// Frontend (Gospodarczy.jsx) zawsze woła to z user.Id zalogowanej osoby;
+// zarzadzajacy maja osobny widok (GET / - wszystkie zadania). Bez tej
+// kontroli dowolny pracownik gospodarczy mogl podac cudze :id i zobaczyc
+// czyjs prywatny harmonogram zadan.
+router.get('/pracownik/:id', (req, res, next) => {
+  if (String(req.user.id) !== String(req.params.id)) {
+    return res.status(403).json({ error: 'Brak uprawnień do podglądu zadań innej osoby.' });
+  }
+  next();
+}, async (req, res) => {
   try {
     const result = await pool.query(
       SELECT_ZADANIA + ' WHERE z.aktywny = TRUE AND z.pracownik_id = $1 ' + ORDER_BY_TERMIN,

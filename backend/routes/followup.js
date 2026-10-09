@@ -111,8 +111,16 @@ router.get('/wszystkie', ZARZADZA_WARSZTATEM, async (req, res) => {
   }
 });
 
-// GET /api/followup/moje/:userId
-router.get('/moje/:userId', async (req, res) => {
+// GET /api/followup/moje/:userId - WYLACZNIE wlasne zadania. Frontend
+// (FollowUpPanel.jsx) zawsze woła to z user.Id zalogowanej osoby, wiec bez
+// tej kontroli dowolny zalogowany mechanik mogl podac cudze :userId i
+// zobaczyc czyjas prywatna liste zadan po naprawie.
+router.get('/moje/:userId', (req, res, next) => {
+  if (String(req.user.id) !== String(req.params.userId)) {
+    return res.status(403).json({ error: 'Brak uprawnień do podglądu zadań innej osoby.' });
+  }
+  next();
+}, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT
@@ -133,9 +141,23 @@ router.get('/moje/:userId', async (req, res) => {
   }
 });
 
-// PUT /api/followup/:id/wykonaj
+// PUT /api/followup/:id/wykonaj - WYLACZNIE wlasne zadanie. W obecnym UI
+// (FollowUpPanel.jsx) kazdy konczy tylko to, co widzi na wlasnej liscie, ale
+// bez tej kontroli dowolny mechanik mogl podac cudze :id i oznaczyc komus
+// innemu zadanie jako wykonane.
 router.put('/:id/wykonaj', requireRole('szef', 'kierownik', 'superadmin', 'mechanik'), async (req, res) => {
   try {
+    const existing = await pool.query(
+      'SELECT user_id AS "UserId" FROM zadania_po_naprawie WHERE id = $1',
+      [req.params.id]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Nie znaleziono zadania.' });
+    }
+    if (String(existing.rows[0].UserId) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'To zadanie jest przypisane do kogoś innego.' });
+    }
+
     await pool.query(
       `UPDATE zadania_po_naprawie SET wykonano = TRUE, data_wykonania = now() WHERE id = $1`,
       [req.params.id]

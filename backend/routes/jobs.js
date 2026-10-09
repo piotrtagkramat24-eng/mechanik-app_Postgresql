@@ -104,8 +104,17 @@ router.get('/', ZARZADZA_WARSZTATEM, async (req, res) => {
   }
 });
 
-// GET /api/jobs/mechanik/:id - roboty przydzielone konkretnemu mechanikowi
-router.get('/mechanik/:id', async (req, res) => {
+// GET /api/jobs/mechanik/:id - roboty przydzielone konkretnemu mechanikowi.
+// Frontend (Mechanic.jsx) zawsze woła to z user.Id zalogowanej osoby;
+// zarzadzajacy widza wszystkie roboty wszystkich mechanikow przez GET /
+// (grupowane po stronie frontu), nie przez ten endpoint. Bez tej kontroli
+// dowolny zalogowany mechanik mogl podac cudze :id i zobaczyc czyjas liste zlecen.
+router.get('/mechanik/:id', (req, res, next) => {
+  if (String(req.user.id) !== String(req.params.id)) {
+    return res.status(403).json({ error: 'Brak uprawnień do podglądu robót innej osoby.' });
+  }
+  next();
+}, async (req, res) => {
   try {
     const result = await pool.query(
       SELECT_JOBS + ' WHERE j.mechanik_id = $1 ' + ORDER_BY_QUEUE,

@@ -8,12 +8,32 @@ const { wystawToken } = require('../middleware/auth');
 // Logowanie jest jedynym endpointem API dostepnym bez tokenu (patrz
 // server.js), wiec jest wystawione publicznie na caly internet (Render).
 // Bez limitu ktokolwiek moglby probowac zgadywac hasla bez ograniczen.
-const limiterLogowania = rateLimit({
+//
+// Limiter PO IP (req.ip, respektujacy "trust proxy" w server.js) jest tylko
+// zgruba drugą warstwą - klient w pelni kontroluje naglowek X-Forwarded-For,
+// wiec przy "trust proxy: 1" moze podac WLASNY, dowolny adres jako pierwszy
+// wpis listy, a Render dopisze prawdziwy adres jako drugi; Express z
+// trustProxy=1 odczyta wtedy jako "req.ip" wlasnie ten PIERWSZY,
+// kontrolowany przez atakujacego wpis - wiec samo IP mozna bez trudu
+// "rotowac" i obejsc limit. Dlatego GLOWNA linia obrony jest PONIZEJ:
+// limiter kluczowany loginem z body (czyms, czego atakujacy nie moze
+// podrobic naglowkiem) - bez wzgledu na to, spod ilu "adresow IP" sie
+// zglasza, proby logowania na JEDNO konto i tak sa ograniczone.
+const limiterLogowaniaPoIp = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minut
-  limit: 15, // 15 prob na IP w tym oknie - spokojnie starcza na pomylki, blokuje brute-force
+  limit: 60, // luzny, drugoplanowy limit - lapie oczywiste zalewanie requestami
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Zbyt wiele prób logowania. Spróbuj ponownie za kilka minut.' },
+});
+
+const limiterLogowaniaPoLoginie = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minut
+  limit: 10, // 10 prob NA KONKRETNE konto w tym oknie - nie da sie obejsc spoofowaniem IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.body?.username || '').trim().toLowerCase() || 'brak-loginu',
+  message: { error: 'Zbyt wiele prób logowania na to konto. Spróbuj ponownie za kilka minut.' },
 });
 
 // POST /api/login - logowanie uzytkownika na podstawie username + password.
@@ -22,7 +42,7 @@ const limiterLogowania = rateLimit({
 // Zwraca token JWT (do naglowka "Authorization: Bearer <token>" w kolejnych
 // zapytaniach) oraz dane uzytkownika (bez hasla), ktore frontend zapamietuje,
 // aby wiedziec jaki widok pokazac (szef / kierownik / mechanik / ...).
-router.post('/login', limiterLogowania, async (req, res) => {
+router.post('/login', limiterLogowaniaPoIp, limiterLogowaniaPoLoginie, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
