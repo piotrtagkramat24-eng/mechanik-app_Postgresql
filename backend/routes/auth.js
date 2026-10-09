@@ -9,31 +9,29 @@ const { wystawToken } = require('../middleware/auth');
 // server.js), wiec jest wystawione publicznie na caly internet (Render).
 // Bez limitu ktokolwiek moglby probowac zgadywac hasla bez ograniczen.
 //
-// Limiter PO IP (req.ip, respektujacy "trust proxy" w server.js) jest tylko
-// zgruba drugą warstwą - klient w pelni kontroluje naglowek X-Forwarded-For,
-// wiec przy "trust proxy: 1" moze podac WLASNY, dowolny adres jako pierwszy
-// wpis listy, a Render dopisze prawdziwy adres jako drugi; Express z
-// trustProxy=1 odczyta wtedy jako "req.ip" wlasnie ten PIERWSZY,
-// kontrolowany przez atakujacego wpis - wiec samo IP mozna bez trudu
-// "rotowac" i obejsc limit. Dlatego GLOWNA linia obrony jest PONIZEJ:
-// limiter kluczowany loginem z body (czyms, czego atakujacy nie moze
-// podrobic naglowkiem) - bez wzgledu na to, spod ilu "adresow IP" sie
-// zglasza, proby logowania na JEDNO konto i tak sa ograniczone.
+// UWAGA - BYL TU WCZESNIEJ takze limiter kluczowany samym loginem z body
+// (zeby ominac ponizsza wade limitu po IP). Zostal usuniety: taki limiter
+// dawal KAZDEMU, bez znajomosci hasla, mozliwosc zablokowania logowania
+// KONKRETNEMU wspolpracownikowi na caly okres okna (wystarczylo wyslac
+// kilka zlych hasel z JEGO loginem) - dla malej, kilkuosobowej firmy to
+// realny i banalny do wykonania sabotaz, gorszy od problemu ktory mial
+// rozwiazywac. NIE DODAWAC z powrotem limitu kluczowanego samym loginem.
+//
+// Limiter PO IP ponizej (req.ip, respektujacy "trust proxy" w server.js) ma
+// znana, zaakceptowana na ta skale wade: klient w pelni kontroluje naglowek
+// X-Forwarded-For, wiec przy "trust proxy: 1" teoretycznie moze podac wlasny
+// adres jako pierwszy wpis listy (Render dopisze prawdziwy jako drugi), a
+// Express odczyta jako "req.ip" ten pierwszy, kontrolowany przez atakujacego
+// wpis - czyli samo IP da sie w teorii "rotowac". W praktyce dla tej skali
+// (maly, wewnetrzny warsztat, nie publiczny serwis) glowna linia obrony
+// pozostaje bcrypt (kazda proba kosztuje realny czas CPU) + brak ujawniania,
+// czy dany login w ogole istnieje (patrz komunikat bledu nizej).
 const limiterLogowaniaPoIp = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minut
-  limit: 60, // luzny, drugoplanowy limit - lapie oczywiste zalewanie requestami
+  limit: 20, // na IP - kilka biura/warsztatu za tym samym NAT nie powinno nigdy tego dotknac
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Zbyt wiele prób logowania. Spróbuj ponownie za kilka minut.' },
-});
-
-const limiterLogowaniaPoLoginie = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minut
-  limit: 10, // 10 prob NA KONKRETNE konto w tym oknie - nie da sie obejsc spoofowaniem IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => String(req.body?.username || '').trim().toLowerCase() || 'brak-loginu',
-  message: { error: 'Zbyt wiele prób logowania na to konto. Spróbuj ponownie za kilka minut.' },
 });
 
 // POST /api/login - logowanie uzytkownika na podstawie username + password.
@@ -42,7 +40,7 @@ const limiterLogowaniaPoLoginie = rateLimit({
 // Zwraca token JWT (do naglowka "Authorization: Bearer <token>" w kolejnych
 // zapytaniach) oraz dane uzytkownika (bez hasla), ktore frontend zapamietuje,
 // aby wiedziec jaki widok pokazac (szef / kierownik / mechanik / ...).
-router.post('/login', limiterLogowaniaPoIp, limiterLogowaniaPoLoginie, async (req, res) => {
+router.post('/login', limiterLogowaniaPoIp, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
