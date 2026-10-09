@@ -22,6 +22,12 @@ const reportsRoutes = require('./routes/reports');
 
 const app = express();
 
+// Na Render (i kazdym innym hostingu za reverse proxy) req.ip bez tego
+// pokazywaloby adres proxy, nie prawdziwego klienta - przez co limiter
+// logowania ponizej (routes/auth.js) liczylby wszystkich uzytkownikow razem
+// jako jedno "IP". "1" = ufaj jednemu hopowi proxy (dokladnie tyle ma Render).
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json({ limit: '15mb' })); // limit podniesiony ze wzgledu na zdjecia (base64) dolaczane do zlecen
 

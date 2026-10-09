@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { harmonogramZUzytkownika, roboczeGodzinyMiedzy } = require('../utils/roboczyCzas');
+const { requireRole } = require('../middleware/auth');
+
+// Zakladka Raporty jest w UI dostepna wylacznie dla szefa i superadmina
+// (patrz showRaporty w Boss.jsx/SuperAdmin.jsx - kierownik jej nie ma) - bez
+// tego mechanik mogly odpytac raport wydajnosci WSZYSTKICH kolegow mimo ze
+// nigdy nie widzi takiej zakladki.
+router.use(requireRole('szef', 'superadmin'));
 
 // Raporty dla szefa/superadmina — praca mechanikow (na podstawie zakonczonych
 // zlecen) oraz pracownika gospodarczego (na podstawie historii wykonan).

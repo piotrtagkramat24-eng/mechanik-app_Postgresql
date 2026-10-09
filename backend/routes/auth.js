@@ -1,8 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { wystawToken } = require('../middleware/auth');
+
+// Logowanie jest jedynym endpointem API dostepnym bez tokenu (patrz
+// server.js), wiec jest wystawione publicznie na caly internet (Render).
+// Bez limitu ktokolwiek moglby probowac zgadywac hasla bez ograniczen.
+const limiterLogowania = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minut
+  limit: 15, // 15 prob na IP w tym oknie - spokojnie starcza na pomylki, blokuje brute-force
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zbyt wiele prób logowania. Spróbuj ponownie za kilka minut.' },
+});
 
 // POST /api/login - logowanie uzytkownika na podstawie username + password.
 // Haslo w bazie jest zahaszowane (bcrypt) - patrz server.js (hashujIstniejaceHasla)
@@ -10,7 +22,7 @@ const { wystawToken } = require('../middleware/auth');
 // Zwraca token JWT (do naglowka "Authorization: Bearer <token>" w kolejnych
 // zapytaniach) oraz dane uzytkownika (bez hasla), ktore frontend zapamietuje,
 // aby wiedziec jaki widok pokazac (szef / kierownik / mechanik / ...).
-router.post('/login', async (req, res) => {
+router.post('/login', limiterLogowania, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {

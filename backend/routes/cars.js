@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { requireRole } = require('../middleware/auth');
 
 // GET /api/cars - lista wszystkich pojazdow (samochody i naczepy)
 router.get('/', async (req, res) => {
@@ -21,7 +22,7 @@ router.get('/', async (req, res) => {
 // body: { marka, model, rejestracja, typPojazdu?, kategoria? }
 // typPojazdu: 'samochod' | 'naczepa' (domyslnie 'samochod')
 // kategoria: uzywana glownie dla naczep (np. Plandeka, Chlodnia, Wywrotka...)
-router.post('/', async (req, res) => {
+router.post('/', requireRole('szef', 'superadmin'), async (req, res) => {
   const { marka, model, rejestracja, typPojazdu, kategoria } = req.body;
 
   if (!marka || !model || !rejestracja) {

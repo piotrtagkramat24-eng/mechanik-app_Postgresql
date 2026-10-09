@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { requireRole } = require('../middleware/auth');
+
+const ZARZADZA_WARSZTATEM = requireRole('szef', 'kierownik', 'superadmin');
+// Ustawienia (przypisania typow zadan po naprawie, odbiorcy powiadomien
+// mailowych) sa w UI dostepne wylacznie dla superadmina (UstawieniaPanel.jsx).
+const TYLKO_SUPERADMIN = requireRole('superadmin');
 
 // Wyposazenie i Inspecto sa teraz JEDNYM zadaniem (typ 'wyposazenie', etykieta
 // "Wyposażenie + Inspecto") - poprzednio byly dwoma osobnymi typami, ktore
@@ -68,7 +74,7 @@ async function utworzZadaniaPoNaprawie(pool, job) {
 }
 
 // GET /api/followup/podsumowanie
-router.get('/podsumowanie', async (req, res) => {
+router.get('/podsumowanie', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT user_id AS "UserId", typ AS "Typ", COUNT(*) AS "Liczba"
@@ -84,7 +90,7 @@ router.get('/podsumowanie', async (req, res) => {
 });
 
 // GET /api/followup/wszystkie
-router.get('/wszystkie', async (req, res) => {
+router.get('/wszystkie', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -128,7 +134,7 @@ router.get('/moje/:userId', async (req, res) => {
 });
 
 // PUT /api/followup/:id/wykonaj
-router.put('/:id/wykonaj', async (req, res) => {
+router.put('/:id/wykonaj', requireRole('szef', 'kierownik', 'superadmin', 'mechanik'), async (req, res) => {
   try {
     await pool.query(
       `UPDATE zadania_po_naprawie SET wykonano = TRUE, data_wykonania = now() WHERE id = $1`,
@@ -144,7 +150,7 @@ router.put('/:id/wykonaj', async (req, res) => {
 // DELETE /api/followup/:id - kierownik/szef usuwa zadanie po naprawie z
 // tablicy mechanikow (np. gdy zostalo utworzone przez pomylke albo juz nie
 // jest potrzebne) - do tej pory nie bylo mozliwosci go usunac.
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query(`DELETE FROM zadania_po_naprawie WHERE id = $1`, [req.params.id]);
     if (result.rowCount === 0) {
@@ -164,7 +170,7 @@ router.delete('/:id', async (req, res) => {
 // czy jeszcze na niego czekaja - inaczej ta informacja znikala calkowicie po
 // wykonaniu zadania (bo /wszystkie i /moje/:userId celowo pokazuja tylko to,
 // co jeszcze trzeba zrobic).
-router.get('/status-zlecenia', async (req, res) => {
+router.get('/status-zlecenia', ZARZADZA_WARSZTATEM, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT job_id AS "JobId", typ AS "Typ", wykonano AS "Wykonano", data_wykonania AS "DataWykonania"
@@ -178,7 +184,7 @@ router.get('/status-zlecenia', async (req, res) => {
 });
 
 // GET /api/followup/powiadomienia
-router.get('/powiadomienia', async (req, res) => {
+router.get('/powiadomienia', TYLKO_SUPERADMIN, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id AS "Id", u.full_name AS "FullName", u.role AS "Role",
@@ -199,7 +205,7 @@ router.get('/powiadomienia', async (req, res) => {
 // zadania po naprawie (Wyposazenie / Inspecto / Mycie) do konkretnej osoby.
 // Zwraca zawsze po jednym wierszu na kazdy typ z TYPY (UserId = null, gdy
 // dla danego typu jeszcze nikogo nie przypisano).
-router.get('/przypisania', async (req, res) => {
+router.get('/przypisania', TYLKO_SUPERADMIN, async (req, res) => {
   try {
     const przypisania = await pobierzPrzypisania(pool);
     res.json(
@@ -219,7 +225,7 @@ router.get('/przypisania', async (req, res) => {
 // PUT /api/followup/przypisania - body: { typ, userId }. Ustawia (lub, gdy
 // userId jest puste/null, czyści) osobę odpowiedzialną za dany typ zadania
 // po naprawie. Każdy typ ma dokładnie jedną przypisaną osobę na raz.
-router.put('/przypisania', async (req, res) => {
+router.put('/przypisania', TYLKO_SUPERADMIN, async (req, res) => {
   const { typ, userId } = req.body || {};
   if (!TYPY.includes(typ)) {
     return res.status(400).json({ error: 'Nieprawidłowy typ zadania po naprawie.' });
@@ -238,7 +244,7 @@ router.put('/przypisania', async (req, res) => {
 });
 
 // PUT /api/followup/powiadomienia - body: { userIds: [1,2,...] }
-router.put('/powiadomienia', async (req, res) => {
+router.put('/powiadomienia', TYLKO_SUPERADMIN, async (req, res) => {
   const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
   const client = await pool.connect();
   try {

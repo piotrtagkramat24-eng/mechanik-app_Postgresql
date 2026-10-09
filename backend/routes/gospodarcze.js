@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow } = require('../mail');
+const { requireRole } = require('../middleware/auth');
+
+// Zarzadzanie modulem gospodarczym (tworzenie/edycja/usuwanie zadan, kolejnosc,
+// numery rejestracyjne na dzis) - te same role co w UI (GospodarczyModule.jsx
+// jest wspolny dla szefa/kierownika/superadmina/administratora).
+const ZARZADZA_GOSPODARCZYM = requireRole('szef', 'kierownik', 'superadmin', 'administrator');
 
 // Wspolny fragment zapytania — zadania cykliczne sa ZAWSZE widoczne (Widoczne=1),
 // jednorazowe tylko jesli nie zakonczone. dni_wyprzedzenia usuniete z logiki widocznosci.
@@ -178,7 +184,7 @@ async function wyslijPowiadomienieOZakonczeniuGospodarczym(pool, zadanie, wykona
 }
 
 // GET /api/gospodarcze - wszystkie zadania (widok szefa/kierownika)
-router.get('/', async (req, res) => {
+router.get('/', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   try {
     const result = await pool.query(SELECT_ZADANIA + ' WHERE z.aktywny = TRUE ' + ORDER_BY_TERMIN);
     res.json(result.rows);
@@ -256,7 +262,7 @@ router.get('/:id/rejestracje-dzisiaj', async (req, res) => {
 
 // PUT /api/gospodarcze/:id/rejestracje-dzisiaj
 // body: { rejestracje: ["ABC123", "XYZ789", ...] }
-router.put('/:id/rejestracje-dzisiaj', async (req, res) => {
+router.put('/:id/rejestracje-dzisiaj', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   const { rejestracje } = req.body;
   if (!Array.isArray(rejestracje)) {
     return res.status(400).json({ error: 'Podaj listę numerów rejestracyjnych.' });
@@ -308,11 +314,14 @@ router.get('/:id/rejestracje', async (req, res) => {
 });
 
 // POST /api/gospodarcze - szef/kierownik dodaje nowe zadanie
-router.post('/', async (req, res) => {
-  const { zadanie, lokalizacja, typ, coIleDni, priorytet, pracownikId, userId, termin, rejestracje } = req.body;
+router.post('/', ZARZADZA_GOSPODARCZYM, async (req, res) => {
+  const { zadanie, lokalizacja, typ, coIleDni, priorytet, pracownikId, termin, rejestracje } = req.body;
+  // Kto dodaje zadanie bierzemy z tokenu, nie z body - patrz analogiczny
+  // komentarz w routes/jobs.js POST /.
+  const userId = req.user.id;
 
-  if (!zadanie || !typ || !pracownikId || !userId) {
-    return res.status(400).json({ error: 'Podaj nazwę zadania, typ, pracownika oraz użytkownika dodającego.' });
+  if (!zadanie || !typ || !pracownikId) {
+    return res.status(400).json({ error: 'Podaj nazwę zadania, typ oraz pracownika.' });
   }
   if (typ !== 'jednorazowe' && typ !== 'cykliczne') {
     return res.status(400).json({ error: 'Nieprawidłowy typ zadania.' });
@@ -390,7 +399,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/gospodarcze/:id - edycja zadania
-router.put('/:id', async (req, res) => {
+router.put('/:id', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   const { zadanie, lokalizacja, coIleDni, priorytet, pracownikId, termin, rejestracje } = req.body;
 
   const client = await pool.connect();
@@ -459,7 +468,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/gospodarcze/:id - archiwizacja
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   try {
     await pool.query('UPDATE gospodarcze_zadania SET aktywny = FALSE WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
@@ -470,9 +479,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 // PUT /api/gospodarcze/:id/wykonaj - oznaczenie jako wykonane
-// body: { dataWykonania, userId, rejestracjeWykonanie? }
-router.put('/:id/wykonaj', async (req, res) => {
-  const { dataWykonania, userId, rejestracjeWykonanie } = req.body;
+// body: { dataWykonania, rejestracjeWykonanie? }
+router.put('/:id/wykonaj', requireRole('szef', 'kierownik', 'superadmin', 'administrator', 'pracownik_gospodarczy'), async (req, res) => {
+  const { dataWykonania, rejestracjeWykonanie } = req.body;
+  // Kto wykonal zadanie bierzemy z tokenu, nie z body - patrz analogiczny
+  // komentarz w routes/jobs.js POST /.
+  const userId = req.user.id;
   if (!dataWykonania) return res.status(400).json({ error: 'Podaj datę wykonania.' });
 
   const client = await pool.connect();
@@ -581,7 +593,7 @@ router.put('/:id/wykonaj', async (req, res) => {
 });
 
 // PUT /api/gospodarcze/:id/kolejnosc - szef/kierownik zmienia kolejnosc zadania
-router.put('/:id/kolejnosc', async (req, res) => {
+router.put('/:id/kolejnosc', ZARZADZA_GOSPODARCZYM, async (req, res) => {
   const { direction } = req.body;
   if (direction !== 'up' && direction !== 'down') {
     return res.status(400).json({ error: 'Nieprawidłowy kierunek zmiany kolejności.' });

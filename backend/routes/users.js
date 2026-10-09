@@ -3,13 +3,17 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { uniewaznijCacheEmailaSuperadmina } = require('../mail');
 
 const MIN_DLUGOSC_HASLA = 6;
 
 // GET /api/users?role=mechanik - lista uzytkownikow, opcjonalnie filtrowana po roli
 // (mozna podac kilka rol na raz, rozdzielone przecinkiem, np. ?role=mechanik,kierownik
 // - potrzebne np. do "Tablicy mechanikow", bo kierownik tez pracuje jako mechanik)
-router.get('/', async (req, res) => {
+// Lista uzytkownikow (z emailami i harmonogramami pracy) jest potrzebna
+// tylko rolom zarzadzajacym (przydzielanie mechanikow, modul gospodarczy,
+// ustawienia) - mechanik/pracownik_gospodarczy nigdy jej nie wywoluja z UI.
+router.get('/', requireRole('szef', 'kierownik', 'superadmin', 'administrator'), async (req, res) => {
   const { role } = req.query;
 
   try {
@@ -82,6 +86,13 @@ router.put('/:id/email', requireRole('superadmin'), async (req, res) => {
       (email || '').trim() || null,
       req.params.id,
     ]);
+    // Mail.js trzyma adres superadmina w pamieci procesu (patrz
+    // pobierzEmailSuperadmina) - bez tego zmiana maila superadmina nie
+    // zadzialalaby az do restartu backendu. Uniewazniamy przy KAZDEJ
+    // edycji maila (nie tylko superadmina), bo to tylko jedno dodatkowe
+    // zapytanie przy nastepnej wysylce maila - taniej niz dociagac tu
+    // jeszcze username, zeby sprawdzic czy to akurat to konto.
+    uniewaznijCacheEmailaSuperadmina();
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

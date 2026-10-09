@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { requireRole } = require('../middleware/auth');
 
 // GET /api/predefiniowane-prace - lista predefiniowanych prac z domyslnymi czasami
 // (uzywana jako podpowiedzi przy dodawaniu roboty do samochodu)
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/predefiniowane-prace - dodanie nowej predefiniowanej pracy (opcjonalnie, np. z panelu szefa)
 // body: { nazwa, czasMin, czasSredni, czasMax }
-router.post('/', async (req, res) => {
+router.post('/', requireRole('szef', 'kierownik', 'superadmin'), async (req, res) => {
   const { nazwa, czasMin, czasSredni, czasMax } = req.body;
   if (!nazwa) return res.status(400).json({ error: 'Podaj nazwę pracy.' });
 

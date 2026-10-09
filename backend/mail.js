@@ -34,6 +34,13 @@ async function pobierzEmailSuperadmina() {
   return cachedSuperadminEmail;
 }
 
+// Wywolywane przez PUT /api/users/:id/email, gdy edytowanym kontem jest
+// 'superadmin1' - bez tego zmiana maila superadmina nie dzialalaby az do
+// restartu backendu (patrz cachedSuperadminEmail wyzej).
+function uniewaznijCacheEmailaSuperadmina() {
+  cachedSuperadminEmail = undefined;
+}
+
 function skonfigurowano() {
   return Boolean(
     process.env.MICROSOFT_TENANT_ID &&
@@ -157,16 +164,22 @@ async function wyslijMaila({ to, subject, text, html }) {
 // spojnie, niezaleznie od tego, ktory route je wysyla.
 function szablonEmail({ tytul, preheader = '', trescHtml, stopkaDodatkowa = '' }) {
   const nazwaNadawcy = process.env.EMAIL_FROM_NAME || 'System Ewidencji Warsztatu';
+  // tytul/preheader czesto buduja sie z wolnego tekstu wpisanego przez
+  // uzytkownika (np. marka/model pojazdu, nazwa zadania) - escapujemy je
+  // TUTAJ, w jednym miejscu, zeby kazdy obecny i przyszly wywolujacy byl
+  // bezpieczny bez pamietania o tym osobno przy kazdym wywolaniu.
+  const tytulBezpieczny = escapeHtml(tytul);
+  const preheaderBezpieczny = escapeHtml(preheader);
   return `<!DOCTYPE html>
 <html lang="pl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${tytul}</title>
+    <title>${tytulBezpieczny}</title>
   </head>
   <body style="margin:0; padding:0; background-color:#f3f4f6; font-family:Segoe UI, Arial, Helvetica, sans-serif;">
     <span style="display:none; font-size:1px; color:#f3f4f6; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
-      ${preheader}
+      ${preheaderBezpieczny}
     </span>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6; padding:24px 0;">
       <tr>
@@ -179,7 +192,7 @@ function szablonEmail({ tytul, preheader = '', trescHtml, stopkaDodatkowa = '' }
             </tr>
             <tr>
               <td style="padding:28px;">
-                <h1 style="margin:0 0 16px; font-size:18px; color:#111827; font-weight:700;">${tytul}</h1>
+                <h1 style="margin:0 0 16px; font-size:18px; color:#111827; font-weight:700;">${tytulBezpieczny}</h1>
                 <div style="font-size:14px; line-height:1.6; color:#374151;">
                   ${trescHtml}
                 </div>
@@ -231,4 +244,4 @@ function tabelkaSzczegolow(wiersze) {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px 0; width:100%;">${wierszeHtml}</table>`;
 }
 
-module.exports = { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow };
+module.exports = { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow, uniewaznijCacheEmailaSuperadmina };
