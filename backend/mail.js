@@ -41,6 +41,29 @@ function uniewaznijCacheEmailaSuperadmina() {
   cachedSuperadminEmail = undefined;
 }
 
+// Odbiorcy powiadomien o zakonczonych robotach/zadaniach (powiadomienia_odbiorcy),
+// a jesli nikt nie jest recznie skonfigurowany - domyslnie wszyscy uzytkownicy
+// z rola szef/kierownik. Wspolna dla jobs.js (zakonczenie roboty warsztatowej)
+// i gospodarcze.js (zakonczenie zadania gospodarczego) - wczesniej ta sama
+// logika byla skopiowana osobno w obu plikach.
+async function pobierzOdbiorcowPowiadomien(pool) {
+  const odbRes = await pool
+    .query(
+      `SELECT u.email AS "Email", u.full_name AS "FullName" FROM powiadomienia_odbiorcy p
+       JOIN users u ON u.id = p.user_id`
+    )
+    .catch(() => ({ rows: [] }));
+
+  let odbiorcy = odbRes.rows || [];
+  if (odbiorcy.length === 0) {
+    const domyslni = await pool
+      .query(`SELECT email AS "Email", full_name AS "FullName" FROM users WHERE role IN ('szef','kierownik')`)
+      .catch(() => ({ rows: [] }));
+    odbiorcy = domyslni.rows || [];
+  }
+  return odbiorcy;
+}
+
 function skonfigurowano() {
   return Boolean(
     process.env.MICROSOFT_TENANT_ID &&
@@ -244,4 +267,11 @@ function tabelkaSzczegolow(wiersze) {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px 0; width:100%;">${wierszeHtml}</table>`;
 }
 
-module.exports = { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow, uniewaznijCacheEmailaSuperadmina };
+module.exports = {
+  wyslijMaila,
+  szablonEmail,
+  escapeHtml,
+  tabelkaSzczegolow,
+  uniewaznijCacheEmailaSuperadmina,
+  pobierzOdbiorcowPowiadomien,
+};

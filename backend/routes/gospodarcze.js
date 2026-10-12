@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow } = require('../mail');
+const { wyslijMaila, szablonEmail, escapeHtml, tabelkaSzczegolow, pobierzOdbiorcowPowiadomien } = require('../mail');
 const { requireRole } = require('../middleware/auth');
 
 // Zarzadzanie modulem gospodarczym (tworzenie/edycja/usuwanie zadan, kolejnosc,
@@ -117,21 +117,7 @@ async function wyslijPowiadomienieONowymZadaniu(zadanie, przepisane = false) {
 // tabela co przy zakonczonych robotach warsztatowych), a jesli nikt nie jest
 // skonfigurowany - domyslnie do wszystkich uzytkownikow z rola szef/kierownik.
 async function wyslijPowiadomienieOZakonczeniuGospodarczym(pool, zadanie, wykonawca, rejestracjeWykonanie) {
-  const odbRes = await pool
-    .query(
-      `SELECT u.email AS "Email", u.full_name AS "FullName" FROM powiadomienia_odbiorcy p
-       JOIN users u ON u.id = p.user_id`
-    )
-    .catch(() => ({ rows: [] }));
-
-  let odbiorcy = odbRes.rows || [];
-  if (odbiorcy.length === 0) {
-    const domyslni = await pool
-      .query(`SELECT email AS "Email", full_name AS "FullName" FROM users WHERE role IN ('szef','kierownik')`)
-      .catch(() => ({ rows: [] }));
-    odbiorcy = domyslni.rows || [];
-  }
-
+  const odbiorcy = await pobierzOdbiorcowPowiadomien(pool);
   const emaile = odbiorcy.map((u) => u.Email).filter(Boolean);
   if (emaile.length === 0) return;
 

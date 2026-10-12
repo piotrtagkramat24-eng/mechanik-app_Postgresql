@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getElapsedInfo, getCompletionInfo, formatGodziny } from '../utils/jobTimeUtils.js';
+import ElapsedBar from './ElapsedBar.jsx';
 
 // Pasek pokazujacy uplyw czasu od rozpoczecia roboty przez mechanika,
 // wzgledem szacowanego (normatywnego) czasu wykonania.
@@ -38,22 +39,12 @@ export default function ElapsedTimeBar({ job }) {
   const { elapsedHours, estimateHours, percent, status } = info;
 
   return (
-    <div className={`elapsed-bar elapsed-bar--${status}`}>
-      <div className="elapsed-bar-track">
-        <div
-          className="elapsed-bar-fill"
-          style={{ width: `${percent != null ? percent : 12}%` }}
-        />
-      </div>
-      <div className="elapsed-bar-label">
-        {status === 'brak-szacunku' ? (
-          <>W trakcie od {formatGodziny(elapsedHours)}</>
-        ) : status === 'przekroczono' ? (
-          <>Przekroczono szac. czas o {formatGodziny(elapsedHours - estimateHours)} (trwa {formatGodziny(elapsedHours)})</>
-        ) : (
-          <>W trakcie: {formatGodziny(elapsedHours)} / szac. {formatGodziny(estimateHours)}</>
-        )}
-      </div>
-    </div>
+    <ElapsedBar
+      status={status}
+      percent={percent}
+      elapsedHours={elapsedHours}
+      estimateHours={estimateHours}
+      szczegolowaEtykieta
+    />
   );
 }

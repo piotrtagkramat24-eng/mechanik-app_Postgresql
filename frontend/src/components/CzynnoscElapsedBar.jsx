@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getCzynnoscElapsedInfo, formatGodziny, DOMYSLNY_HARMONOGRAM } from '../utils/jobTimeUtils.js';
+import { getCzynnoscElapsedInfo, DOMYSLNY_HARMONOGRAM } from '../utils/jobTimeUtils.js';
+import ElapsedBar from './ElapsedBar.jsx';
 
 // Pasek postepu DLA POJEDYNCZEJ CZYNNOSCI (kazda ma wlasny, niezalezny od
 // pozostalych na tym samym zleceniu). Widoczny tylko gdy czynnosc jest
@@ -24,19 +25,13 @@ export default function CzynnoscElapsedBar({ czynnosc, harmonogram = DOMYSLNY_HA
   const zakonczona = czynnosc.Status === 'zakonczone';
 
   return (
-    <div className={`elapsed-bar elapsed-bar--${status} job-czynnosci-item-bar`}>
-      <div className="elapsed-bar-track">
-        <div className="elapsed-bar-fill" style={{ width: `${percent != null ? percent : 12}%` }} />
-      </div>
-      <div className="elapsed-bar-label">
-        {status === 'brak-szacunku' ? (
-          <>{zakonczona ? 'Trwało' : 'W trakcie od'} {formatGodziny(elapsedHours)}</>
-        ) : status === 'przekroczono' ? (
-          <>Przekroczono o {formatGodziny(elapsedHours - estimateHours)} ({zakonczona ? 'trwało' : 'trwa'} {formatGodziny(elapsedHours)})</>
-        ) : (
-          <>{zakonczona ? 'Trwało' : 'W trakcie'}: {formatGodziny(elapsedHours)} / szac. {formatGodziny(estimateHours)}</>
-        )}
-      </div>
-    </div>
+    <ElapsedBar
+      status={status}
+      percent={percent}
+      elapsedHours={elapsedHours}
+      estimateHours={estimateHours}
+      zakonczona={zakonczona}
+      className="job-czynnosci-item-bar"
+    />
   );
 }
