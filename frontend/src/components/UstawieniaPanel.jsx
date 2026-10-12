@@ -1,6 +1,35 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
 
+const SESJE_POLL_INTERVAL_MS = 10000;
+
+const ROLE_LABELS = {
+  superadmin:            'Superadmin',
+  szef:                  'Szef',
+  kierownik:             'Kierownik',
+  mechanik:              'Mechanik',
+  pracownik_gospodarczy: 'Pracownik gospodarczy',
+  administrator:         'Administrator',
+};
+
+function formatPrzedChwila(iso) {
+  const sekundy = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sekundy < 60) return 'przed chwilą';
+  const minuty = Math.floor(sekundy / 60);
+  if (minuty < 60) return `${minuty} min temu`;
+  const godziny = Math.floor(minuty / 60);
+  return `${godziny} godz. temu`;
+}
+
+function formatGodzinaLubData(iso) {
+  const d = new Date(iso);
+  const dzis = new Date();
+  const toSamDzien = d.toDateString() === dzis.toDateString();
+  const godzina = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  if (toSamDzien) return godzina;
+  return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) + ', ' + godzina;
+}
+
 // Pola formularza godzin pracy wyciagniete z rekordu uzytkownika (kolumny
 // Godz* zwracane przez GET /api/users) - patrz DOMYSLNY_HARMONOGRAM w
 // jobTimeUtils.js dla domyslnych wartosci firmowych.
@@ -26,8 +55,26 @@ export default function UstawieniaPanel() {
   const [powiadomienia, setPowiadomienia] = useState([]);
   const [przypisania, setPrzypisania] = useState([]);
   const [godzinyDrafts, setGodzinyDrafts] = useState({});
+  const [sesje, setSesje] = useState([]);
   const [error, setError] = useState('');
   const [zapisano, setZapisano] = useState('');
+
+  // Aktywnie zalogowani — osobny, czesciej odswiezany polling (nie chcemy
+  // odswiezac calego panelu, w tym np. draftow w edytowanych polach, co 10s).
+  const refreshSesje = useCallback(async () => {
+    try {
+      setSesje(await api.getAktywneSesje());
+    } catch {
+      // Cichy blad — ten panel jest dodatkiem, nie powinien zaslaniac
+      // bledow glownych formularzy ponizej (email/haslo/godziny itd.).
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSesje();
+    const interval = setInterval(refreshSesje, SESJE_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refreshSesje]);
 
   const refresh = useCallback(async () => {
     try {
@@ -150,6 +197,30 @@ export default function UstawieniaPanel() {
     <div className="ustawienia-wrap">
       {error && <div className="error-message">{error}</div>}
       {zapisano && <div className="success-message">{zapisano}</div>}
+
+      <section className="panel">
+        <h2>Aktywnie zalogowani</h2>
+        <p className="panel-hint">
+          Osoby z jakąkolwiek aktywnością w aplikacji w ciągu ostatnich 5 minut. Lista odświeża się sama.
+        </p>
+        {sesje.length === 0 ? (
+          <p>Nikt obecnie nie korzysta z aplikacji.</p>
+        ) : (
+          <div className="ustawienia-sesje-list">
+            {sesje.map((s) => (
+              <div key={s.Id} className="ustawienia-sesje-row">
+                <span className="ustawienia-sesje-kropka" title="Aktywny/a" />
+                <span className="ustawienia-sesje-nazwa">
+                  {s.FullName} <span className="ustawienia-rola">({ROLE_LABELS[s.Role] || s.Role})</span>
+                </span>
+                <span className="ustawienia-sesje-czas">
+                  aktywny/a {formatPrzedChwila(s.OstatniaAktywnosc)} · zalogowano {formatGodzinaLubData(s.ZalogowanyOd)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="panel">
         <h2>Adresy e-mail użytkowników</h2>

@@ -2714,6 +2714,28 @@ body {
 }
 
 .ustawienia-wrap { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+
+.ustawienia-sesje-list { display: flex; flex-direction: column; gap: 8px; }
+.ustawienia-sesje-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+.ustawienia-sesje-kropka {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.ustawienia-sesje-nazwa { font-weight: 600; font-size: 13px; color: var(--text); flex: 1; min-width: 160px; }
+.ustawienia-sesje-czas { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+
 .ustawienia-email-list { display: flex; flex-direction: column; gap: 8px; }
 .ustawienia-email-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ustawienia-email-row input { flex: 1; min-width: 200px; }
