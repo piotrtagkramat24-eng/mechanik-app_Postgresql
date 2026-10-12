@@ -38,6 +38,40 @@ function wystawToken(user) {
   );
 }
 
+// Sledzenie "kto jest aktywnie zalogowany" - w pamieci procesu (JWT jest
+// bezstanowy, nie ma gdzie indziej trzymac listy sesji). Aktualizowane przy
+// KAZDYM uwierzytelnionym zapytaniu do API (ponizej w requireAuth), wiec
+// "ostatnia aktywnosc" to realnie "ostatnie dzialanie w aplikacji", a nie
+// tylko "ma jeszcze wazny token". Mapa jest ograniczona z natury do liczby
+// kont w systemie (klucz = user id, nadpisywany, nie rosnie w nieskonczonosc
+// jak np. mapa prob logowania w routes/auth.js, ktora kluczuje dowolnym
+// tekstem od anonimowego klienta).
+const aktywneSesje = new Map(); // userId -> { id, username, fullName, role, zalogowanyOd, ostatniaAktywnosc }
+
+function zarejestrujAktywnosc(dane) {
+  aktywneSesje.set(dane.id, {
+    id: dane.id,
+    username: dane.username,
+    fullName: dane.fullName,
+    role: dane.role,
+    zalogowanyOd: dane.iat * 1000, // "iat" z JWT jest w sekundach
+    ostatniaAktywnosc: Date.now(),
+  });
+}
+
+// Zwraca sesje z aktywnoscia w ciagu ostatnich `oknoMs` (domyslnie 5 minut) -
+// to jest nasza definicja "aktywnie zalogowany", bo token sam w sobie jest
+// wazny 12h niezaleznie od tego, czy ktos faktycznie korzysta z aplikacji.
+// Wylogowanie jest dzis czysto po stronie frontu (kasuje token lokalnie, nie
+// informuje backendu) - taka osoba zniknie z listy, gdy tylko przestanie
+// wysylac zapytania, czyli najpozniej po uplywie okna.
+function pobierzAktywneSesje(oknoMs = 5 * 60 * 1000) {
+  const teraz = Date.now();
+  return Array.from(aktywneSesje.values())
+    .filter((s) => teraz - s.ostatniaAktywnosc <= oknoMs)
+    .sort((a, b) => b.ostatniaAktywnosc - a.ostatniaAktywnosc);
+}
+
 // Middleware: wymaga poprawnego naglowka "Authorization: Bearer <token>".
 // Po weryfikacji ustawia req.user = { id, username, role, fullName }.
 function requireAuth(req, res, next) {
@@ -51,6 +85,7 @@ function requireAuth(req, res, next) {
   try {
     const dane = jwt.verify(token, pobierzSekret());
     req.user = dane;
+    zarejestrujAktywnosc(dane);
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Sesja wygasła lub token jest nieprawidłowy. Zaloguj się ponownie.' });
@@ -69,4 +104,4 @@ function requireRole(...dozwoloneRole) {
   };
 }
 
-module.exports = { requireAuth, requireRole, wystawToken };
+module.exports = { requireAuth, requireRole, wystawToken, pobierzAktywneSesje };

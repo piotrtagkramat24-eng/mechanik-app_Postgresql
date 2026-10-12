@@ -2,10 +2,25 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, pobierzAktywneSesje } = require('../middleware/auth');
 const { uniewaznijCacheEmailaSuperadmina } = require('../mail');
 
 const MIN_DLUGOSC_HASLA = 6;
+
+// GET /api/users/active-sessions - lista aktywnie zalogowanych uzytkownikow
+// (aktywnosc w ciagu ostatnich 5 minut - patrz pobierzAktywneSesje w
+// middleware/auth.js). Wylacznie dla superadmina.
+router.get('/active-sessions', requireRole('superadmin'), (req, res) => {
+  const sesje = pobierzAktywneSesje().map((s) => ({
+    Id: s.id,
+    Username: s.username,
+    FullName: s.fullName,
+    Role: s.role,
+    ZalogowanyOd: new Date(s.zalogowanyOd).toISOString(),
+    OstatniaAktywnosc: new Date(s.ostatniaAktywnosc).toISOString(),
+  }));
+  res.json(sesje);
+});
 
 // GET /api/users?role=mechanik - lista uzytkownikow, opcjonalnie filtrowana po roli
 // (mozna podac kilka rol na raz, rozdzielone przecinkiem, np. ?role=mechanik,kierownik

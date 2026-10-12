@@ -55,6 +55,7 @@ export const api = {
     request(`/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ newPassword }) }),
 
   getUsers: (role) => request('/users' + (role ? `?role=${role}` : '')),
+  getAktywneSesje: () => request('/users/active-sessions'),
   getCars: () => request('/cars'),
   postCar: (data) => request('/cars', { method: 'POST', body: JSON.stringify(data) }),
   createCar: (marka, model, rejestracja, typPojazdu, kategoria) =>
