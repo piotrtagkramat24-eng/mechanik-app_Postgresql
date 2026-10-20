@@ -63,9 +63,13 @@ export const api = {
 
   getPredefiniowanePrace: () => request('/predefiniowane-prace'),
 
-  getJobs: () => request('/jobs'),
-  getJobsMechanik: (id) => request(`/jobs/mechanik/${id}`),
-  getJobsForMechanik: (id) => request(`/jobs/mechanik/${id}`),
+  // zakonczone=true pobiera WYLACZNIE pelna historie zakonczonych zlecen -
+  // domyslnie (bez tej flagi) zwracane sa tylko aktywne, zeby ciagle
+  // pollowane widoki (Manager/DodajRobotePanel/Mechanic co kilka sekund) nie
+  // sciagaly za kazdym razem calej, rosnacej bez ograniczen historii.
+  getJobs: (zakonczone = false) => request('/jobs' + (zakonczone ? '?zakonczone=1' : '')),
+  getJobsMechanik: (id, zakonczone = false) => request(`/jobs/mechanik/${id}` + (zakonczone ? '?zakonczone=1' : '')),
+  getJobsForMechanik: (id, zakonczone = false) => request(`/jobs/mechanik/${id}` + (zakonczone ? '?zakonczone=1' : '')),
   postJob: (data) => request('/jobs', { method: 'POST', body: JSON.stringify(data) }),
   // czynnosci: [{ predefiniowanaPracaId?, nazwa, czasMin?, czasSredni?, czasMax? }, ...]
   createJob: (carId, userId, czynnosci) =>

@@ -120,6 +120,14 @@ export default function Mechanic({ user, embedded = false }) {
   const [error, setError] = useState('');
   const [zakonczJob, setZakonczJob] = useState(null);
 
+  // Zakonczone zlecenia (pelna historia) - pobierane WYLACZNIE przy pierwszym
+  // rozwinieciu panelu "Zakonczone" (patrz onOpen ponizej), nie w kazdym
+  // pollu co 4s razem z reszta - tych zlecen z czasem przybywa bez konca,
+  // a i tak juz sie nie zmieniaja.
+  const [completedJobs, setCompletedJobs] = useState([]);
+  const [completedLoading, setCompletedLoading] = useState(false);
+  const [completedRequested, setCompletedRequested] = useState(false);
+
   const refresh = useCallback(async () => {
     try {
       const data = await api.getJobsForMechanik(user.Id);
@@ -128,6 +136,22 @@ export default function Mechanic({ user, embedded = false }) {
       setError(err.message);
     }
   }, [user.Id]);
+
+  const fetchCompleted = useCallback(async () => {
+    setCompletedLoading(true);
+    try {
+      setCompletedJobs(await api.getJobsForMechanik(user.Id, true));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, [user.Id]);
+
+  function handleOpenZakonczone() {
+    setCompletedRequested(true);
+    fetchCompleted();
+  }
 
   useEffect(() => {
     refresh();
@@ -182,6 +206,11 @@ export default function Mechanic({ user, embedded = false }) {
         await api.setStatus(zakonczJob.Id, 'zakonczone', opis.trim() || undefined, zdjecie || undefined);
       }
       await refresh();
+      // Jesli panel "Zakonczone" byl juz raz otwarty (completedRequested),
+      // doswiezamy go tez - inaczej wlasnie zakonczone zlecenie "zniknieto"
+      // z aktywnych, ale nie pojawiloby sie w juz-widocznej liscie zakonczonych
+      // az do nastepnego zwiniecia/rozwiniecia panelu.
+      if (completedRequested) fetchCompleted();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -191,7 +220,9 @@ export default function Mechanic({ user, embedded = false }) {
 
   const przydzielone = jobs.filter((j) => j.Status === 'przydzielone');
   const wTrakcie = jobs.filter((j) => j.Status === 'rozpoczete');
-  const zakonczone = jobs.filter((j) => j.Status === 'zakonczone');
+  // Zakonczone maja osobne zrodlo (completedJobs, pobierane na zadanie) -
+  // jobs (z pollingu co 4s) nie zawiera ich juz w ogole.
+  const zakonczone = completedJobs;
 
   return (
     <div className="page">
@@ -226,9 +257,10 @@ export default function Mechanic({ user, embedded = false }) {
       </CollapsiblePanel>
 
       {/* 2. Zakończone — zaraz pod "W trakcie" */}
-      <CollapsiblePanel title="Zakończone" count={zakonczone.length} defaultOpen={false}>
-        {zakonczone.length === 0 && <p>Brak zakończonych zleceń.</p>}
-        {zakonczone.map((job) => (
+      <CollapsiblePanel title="Zakończone" count={completedRequested ? zakonczone.length : 0} defaultOpen={false} onOpen={handleOpenZakonczone}>
+        {completedLoading && <p>Wczytywanie…</p>}
+        {!completedLoading && zakonczone.length === 0 && <p>Brak zakończonych zleceń.</p>}
+        {!completedLoading && zakonczone.map((job) => (
           <div key={job.Id} className="job-card job-card--done">
             <div className="job-card-top">
               <strong>{job.Marka} {job.Model} · {job.Rejestracja}</strong>

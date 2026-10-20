@@ -30,6 +30,12 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
   const [statusFilter, setStatusFilter] = useState('wszystkie');
   const [editJob, setEditJob] = useState(null);
 
+  // Zakonczone zlecenia (pelna historia) sa pobierane WYLACZNIE na zadanie -
+  // dopiero gdy ktos faktycznie klinie zakladke "Zakonczone" ponizej, a nie
+  // przy kazdym pollu co 4s razem z reszta - patrz handleKlikStatusTab.
+  const [completedJobs, setCompletedJobs] = useState([]);
+  const [completedLoading, setCompletedLoading] = useState(false);
+
   const [marka, setMarka] = useState('');
   const [model, setModel] = useState('');
   const [rejestracja, setRejestracja] = useState('');
@@ -48,24 +54,45 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [jobsData, carsData, predefData] = await Promise.all([
-        api.getJobs(),
-        api.getCars(),
-        api.getPredefiniowanePrace(),
-      ]);
-      setJobs(jobsData);
+      const wywolania = [api.getCars(), api.getPredefiniowanePrace()];
+      // Lista zlecen (i jej poll co kilka sekund) ma sens tylko gdy jest
+      // w ogole wyswietlana - zakladka "Dodaj robote" (showJobList=false)
+      // pokazuje wylacznie formularze, wiec wczesniej niepotrzebnie sciagala
+      // te sama liste co zakladka "Warsztat" w tle, bez zadnego pozytku.
+      if (showJobList) wywolania.push(api.getJobs());
+
+      const [carsData, predefData, jobsData] = await Promise.all(wywolania);
       setCars(carsData);
       setPredefiniowane(predefData);
+      if (showJobList) setJobs(jobsData);
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [showJobList]);
 
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  // Historia zakonczonych zlecen - pobierana dopiero przy wejsciu w ta
+  // zakladke (patrz STATUS_TABS/handleKlikStatusTab nizej), nie w refresh().
+  const fetchCompleted = useCallback(async () => {
+    setCompletedLoading(true);
+    try {
+      setCompletedJobs(await api.getJobs(true));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, []);
+
+  function handleKlikStatusTab(key) {
+    setStatusFilter(key);
+    if (key === 'zakonczone') fetchCompleted();
+  }
 
   async function handleAddCar(e) {
     e.preventDefault();
@@ -177,7 +204,9 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
     { key: 'zakonczone', label: 'Zakończone', match: (j) => j.Status === 'zakonczone' },
   ];
   const aktywnyTab = STATUS_TABS.find((t) => t.key === statusFilter) || STATUS_TABS[0];
-  const filteredJobs = jobs.filter(aktywnyTab.match);
+  // "zakonczone" ma osobne zrodlo danych (completedJobs, pobierane na zadanie) -
+  // jobs nie zawiera juz zakonczonych wcale (patrz refresh() i api.getJobs()).
+  const filteredJobs = statusFilter === 'zakonczone' ? completedJobs : jobs.filter(aktywnyTab.match);
 
   return (
     <div className="page">
@@ -309,16 +338,21 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
 
       {showJobList && (
         <section className="panel">
-          <h2>Wszystkie zlecenia ({jobs.length})</h2>
+          <h2>Zlecenia aktywne ({jobs.length})</h2>
           <div className="inner-tabs">
             {STATUS_TABS.map((tab) => {
-              const count = jobs.filter(tab.match).length;
+              // "zakonczone" liczone z osobnego, pobieranego na zadanie zrodla -
+              // zanim ktos tam wejdzie pierwszy raz, licznik po prostu nie jest
+              // jeszcze znany (pokazujemy "…" zamiast mylacego "0").
+              const count = tab.key === 'zakonczone'
+                ? (completedLoading || completedJobs.length > 0 || statusFilter === 'zakonczone' ? completedJobs.length : '…')
+                : jobs.filter(tab.match).length;
               return (
                 <button
                   key={tab.key}
                   type="button"
                   className={`inner-tab ${statusFilter === tab.key ? 'inner-tab--active' : ''}`}
-                  onClick={() => setStatusFilter(tab.key)}
+                  onClick={() => handleKlikStatusTab(tab.key)}
                 >
                   {tab.label} ({count})
                 </button>
@@ -326,8 +360,9 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
             })}
           </div>
           <div className="job-list">
-            {filteredJobs.length === 0 && <p>Brak robót w tej kategorii.</p>}
-            {filteredJobs.map((job) => (
+            {statusFilter === 'zakonczone' && completedLoading && <p>Wczytywanie…</p>}
+            {!(statusFilter === 'zakonczone' && completedLoading) && filteredJobs.length === 0 && <p>Brak robót w tej kategorii.</p>}
+            {!(statusFilter === 'zakonczone' && completedLoading) && filteredJobs.map((job) => (
               <JobCard
                 key={job.Id}
                 job={job}

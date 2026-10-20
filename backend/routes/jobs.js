@@ -93,10 +93,26 @@ const ORDER_BY_QUEUE = `
     j.data_zakonczenia DESC
 `;
 
+// Query param "zakonczone" (?zakonczone=1) uzywany przez GET / i GET /mechanik/:id
+// ponizej - patrz komentarz przy obu trasach.
+function chceZakonczone(req) {
+  return req.query.zakonczone === '1' || req.query.zakonczone === 'true';
+}
+
 // GET /api/jobs - wszystkie roboty (widok szefa i kierownika)
+// GET /api/jobs?zakonczone=1 - TYLKO zakonczone (pelna historia)
+//
+// Domyslnie (bez parametru) zwraca TYLKO aktywne zlecenia. To jest kluczowe:
+// ten endpoint jest pollowany co kilka sekund (Manager.jsx, DodajRobotePanel.jsx)
+// przez caly dzien pracy, a zakonczonych zlecen z czasem przybywaja setki/tysiace
+// (nigdy nie znikaja) - zwracanie ich w KAZDYM pollu kosztowalo realnie kilka GB
+// transferu dziennie na jedna otwarta karte przegladarki. Pelna historia jest
+// pobierana TYLKO gdy frontend jawnie o nia poprosi (?zakonczone=1) - czyli
+// dokladnie wtedy, gdy ktos faktycznie klika zakladke "Zakonczone".
 router.get('/', ZARZADZA_WARSZTATEM, async (req, res) => {
+  const warunek = chceZakonczone(req) ? "WHERE j.status = 'zakonczone'" : "WHERE j.status <> 'zakonczone'";
   try {
-    const result = await pool.query(SELECT_JOBS + ORDER_BY_QUEUE);
+    const result = await pool.query(SELECT_JOBS + ' ' + warunek + ' ' + ORDER_BY_QUEUE);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -104,7 +120,8 @@ router.get('/', ZARZADZA_WARSZTATEM, async (req, res) => {
   }
 });
 
-// GET /api/jobs/mechanik/:id - roboty przydzielone konkretnemu mechanikowi.
+// GET /api/jobs/mechanik/:id[?zakonczone=1] - roboty przydzielone konkretnemu
+// mechanikowi; jak wyzej, domyslnie tylko aktywne - patrz komentarz przy GET /.
 // Frontend (Mechanic.jsx) zawsze woła to z user.Id zalogowanej osoby;
 // zarzadzajacy widza wszystkie roboty wszystkich mechanikow przez GET /
 // (grupowane po stronie frontu), nie przez ten endpoint. Bez tej kontroli
@@ -115,9 +132,10 @@ router.get('/mechanik/:id', (req, res, next) => {
   }
   next();
 }, async (req, res) => {
+  const warunek = chceZakonczone(req) ? "AND j.status = 'zakonczone'" : "AND j.status <> 'zakonczone'";
   try {
     const result = await pool.query(
-      SELECT_JOBS + ' WHERE j.mechanik_id = $1 ' + ORDER_BY_QUEUE,
+      SELECT_JOBS + ' WHERE j.mechanik_id = $1 ' + warunek + ' ' + ORDER_BY_QUEUE,
       [req.params.id]
     );
     res.json(result.rows);
