@@ -12,8 +12,9 @@ import FollowUpPanel from '../components/FollowUpPanel.jsx';
 import UstawieniaPanel from '../components/UstawieniaPanel.jsx';
 import Raporty from './Raporty.jsx';
 import { formatCzasSzacowany } from '../utils/jobTimeUtils.js';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 300000; // 5 min - istotne zdarzenia (przydzielenie, zakonczenie) i tak trafiaja mailem
 
 const TAB_COLORS = [
   '#2563eb', '#16a34a', '#d97706', '#9333ea',
@@ -504,8 +505,7 @@ export default function Manager({
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_INTERVAL_MS);
   }, [refresh]);
 
   // Pelna historia zakonczonych zlecen + status zadan po naprawie (potrzebny

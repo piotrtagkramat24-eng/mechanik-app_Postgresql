@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const SESJE_POLL_INTERVAL_MS = 10000;
+const SESJE_POLL_INTERVAL_MS = 300000; // 5 min
 
 const ROLE_LABELS = {
   superadmin:            'Superadmin',
@@ -72,8 +73,7 @@ export default function UstawieniaPanel() {
 
   useEffect(() => {
     refreshSesje();
-    const interval = setInterval(refreshSesje, SESJE_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refreshSesje, SESJE_POLL_INTERVAL_MS);
   }, [refreshSesje]);
 
   const refresh = useCallback(async () => {

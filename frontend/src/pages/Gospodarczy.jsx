@@ -3,8 +3,9 @@ import { api } from '../api.js';
 import GospodarczyCalendar from '../components/GospodarczyCalendar.jsx';
 import PriorityBadge from '../components/PriorityBadge.jsx';
 import FollowUpPanel from '../components/FollowUpPanel.jsx';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 300000; // 5 min - istotne zdarzenia (przydzielenie, zakonczenie) i tak trafiaja mailem
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
@@ -209,8 +210,7 @@ export default function Gospodarczy({ user }) {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_INTERVAL_MS);
   }, [refresh]);
 
   async function handleWykonaj(id, dataWykonania, rejestracjeWykonanie) {

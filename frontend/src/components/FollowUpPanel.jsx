@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../api.js';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_MS = 15000;
+const POLL_MS = 300000; // 5 min - nowe zadanie po naprawie i tak trafia mailem
 
 // Pokazuje "dalsze kroki" po zakonczeniu roboty przez mechanika (Wyposazenie /
 // Inspecto / Mycie), z ktorych kazdy jest recznie przypisany do konkretnej
@@ -24,8 +25,7 @@ export default function FollowUpPanel({ user }) {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, POLL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_MS);
   }, [refresh]);
 
   async function handleWykonaj(id) {
