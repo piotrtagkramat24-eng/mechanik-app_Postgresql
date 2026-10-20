@@ -200,7 +200,7 @@ function PoNaprawieCard({ zadanie, onDelete }) {
   );
 }
 
-function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', onEdit, onDelete, onDeletePoNaprawie, canManageUrlop = false, onToggleUrlop }) {
+function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], statusPoNaprawiePerJob = {}, onMove, onReassign, onDropJob, isDropTarget, filterMode = 'wszystkie', completedLoading = false, onEdit, onDelete, onDeletePoNaprawie, canManageUrlop = false, onToggleUrlop }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const columnRef = useRef(null);
@@ -217,7 +217,6 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
   const activeJobs = czyWszystkie
     ? [...activeJobsRaw].sort((a, b) => (a.Status === 'rozpoczete' ? 0 : 1) - (b.Status === 'rozpoczete' ? 0 : 1))
     : activeJobsRaw;
-  const doneJobs = czyWszystkie ? jobs.filter(j => j.Status === 'zakonczone') : [];
 
   // Ikony stanu zamiast liczby zlecen przy nazwisku:
   //  - 🔧 mechanik ma cos aktualnie w trakcie (Status='rozpoczete')
@@ -367,8 +366,9 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
           przeciaganie moglyby dawac mylace wyniki; strzalki gora/dol dalej dzialaja). */}
       {!czyWszystkie && filterMode === 'zakonczone' && (
         <div className="kb-column-body">
-          {jobs.length === 0 && <div className="kb-empty">Brak zleceń</div>}
-          {jobs.map(job => (
+          {completedLoading && <div className="kb-empty">Wczytywanie…</div>}
+          {!completedLoading && jobs.length === 0 && <div className="kb-empty">Brak zleceń</div>}
+          {!completedLoading && jobs.map(job => (
             <div key={job.Id} className="kb-card kb-card--done">
               <div className="kb-card-body">
                 <div className="kb-card-title">
@@ -455,6 +455,13 @@ export default function Manager({
   const [predefiniowane, setPredefiniowane] = useState([]);
   const [zadaniaPoNaprawie, setZadaniaPoNaprawie] = useState([]);
   const [statusZadanPoNaprawie, setStatusZadanPoNaprawie] = useState([]);
+  // Zakonczone zlecenia (pelna historia) - pobierane WYLACZNIE na zadanie,
+  // gdy ktos faktycznie wejdzie w zakladke "Zakonczone" (patrz
+  // handleKanbanFilterClick), a NIE w kazdym pollu co 5s razem z reszta.
+  // Razem z nimi pobierane jest tez statusZadanPoNaprawie (uzywane tylko
+  // przy wyswietlaniu zakonczonych kart - patrz PoNaprawieStatusBadges).
+  const [completedJobs, setCompletedJobs] = useState([]);
+  const [completedLoading, setCompletedLoading] = useState(false);
   const [wybor, setWybor] = useState({});
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('nowe');
@@ -480,18 +487,16 @@ export default function Manager({
   const refresh = useCallback(async () => {
     if (pollPaused.current) return;
     try {
-      const [jobsData, mechanicyData, predefData, poNaprawieData, statusPoNaprawieData] = await Promise.all([
+      const [jobsData, mechanicyData, predefData, poNaprawieData] = await Promise.all([
         api.getJobs(),
         api.getUsers(mechanicRoles),
         api.getPredefiniowanePrace(),
         api.getWszystkieZadaniaPoNaprawie(),
-        api.getStatusZadanPoNaprawie(),
       ]);
       setJobs(jobsData);
       setMechanicy(mechanicyData);
       setPredefiniowane(predefData);
       setZadaniaPoNaprawie(poNaprawieData);
-      setStatusZadanPoNaprawie(statusPoNaprawieData);
     } catch (err) {
       setError(err.message);
     }
@@ -502,6 +507,31 @@ export default function Manager({
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  // Pelna historia zakonczonych zlecen + status zadan po naprawie (potrzebny
+  // tylko do znaczkow na kartach zakonczonych) - pobierane raz, przy wejsciu
+  // w zakladke "Zakonczone" (patrz handleKanbanFilterClick nizej), NIE
+  // pollowane w tle jak reszta (zakonczone zlecenia i tak sie juz nie zmieniaja).
+  const fetchCompleted = useCallback(async () => {
+    setCompletedLoading(true);
+    try {
+      const [completedData, statusPoNaprawieData] = await Promise.all([
+        api.getJobs(true),
+        api.getStatusZadanPoNaprawie(),
+      ]);
+      setCompletedJobs(completedData);
+      setStatusZadanPoNaprawie(statusPoNaprawieData);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, []);
+
+  function handleKanbanFilterClick(key) {
+    setKanbanFilter(key);
+    if (key === 'zakonczone') fetchCompleted();
+  }
 
   async function handleEditJob(jobId, data) {
     await api.updateJob(jobId, data);
@@ -663,7 +693,10 @@ export default function Manager({
 
   function getJobsForMechanik(mechanikId) {
     const kierunek = doneSortDir === 'asc' ? 1 : -1;
-    return jobs
+    // "zakonczone" ma osobne zrodlo (completedJobs, pobierane na zadanie -
+    // patrz fetchCompleted) - jobs nie zawiera juz zakonczonych w ogole.
+    const zrodlo = kanbanFilter === 'zakonczone' ? completedJobs : jobs;
+    return zrodlo
       .filter(j => j.MechanikId === mechanikId)
       .filter(pasujeDoFiltraZakonczonych)
       .sort((a, b) => {
@@ -827,13 +860,17 @@ export default function Manager({
         <div className="kb-board-wrap">
           <div className="inner-tabs kb-filter-tabs">
             {KANBAN_FILTERS.map((f) => {
-              const count = jobs.filter(j => matchesKanbanFilter(j, f.key)).length;
+              // "Zakonczone" liczone z osobnego, pobieranego na zadanie zrodla -
+              // zanim ktos tam wejdzie pierwszy raz, nie znamy jeszcze liczby.
+              const count = f.key === 'zakonczone'
+                ? (completedLoading || completedJobs.length > 0 || kanbanFilter === 'zakonczone' ? completedJobs.length : '…')
+                : jobs.filter(j => matchesKanbanFilter(j, f.key)).length;
               return (
                 <button
                   key={f.key}
                   type="button"
                   className={`inner-tab ${kanbanFilter === f.key ? 'inner-tab--active' : ''}`}
-                  onClick={() => setKanbanFilter(f.key)}
+                  onClick={() => handleKanbanFilterClick(f.key)}
                 >
                   {f.label} ({count})
                 </button>
@@ -891,6 +928,7 @@ export default function Manager({
                 onDropJob={handleDropJob}
                 isDropTarget={dropTargetId === m.Id}
                 filterMode={kanbanFilter}
+                completedLoading={kanbanFilter === 'zakonczone' && completedLoading}
                 onEdit={setEditJob}
                 onDelete={handleDeleteJob}
                 onDeletePoNaprawie={handleDeletePoNaprawie}
