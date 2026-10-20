@@ -3,8 +3,9 @@ import { api } from '../api.js';
 import GospodarczyForm from './GospodarczyForm.jsx';
 import GospodarczyTaskCard from './GospodarczyTaskCard.jsx';
 import GospodarczyCalendar from './GospodarczyCalendar.jsx';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_INTERVAL_MS = 6000;
+const POLL_INTERVAL_MS = 300000; // 5 min - istotne zdarzenia (przydzielenie, zakonczenie) i tak trafiaja mailem
 
 // Karta zadania z przyciskami kolejnosci (strzalki + drag)
 function GospodarczyTaskCardSorted({ task, showPracownik, onDelete, onEdit, onMove, onDragStart, onDragOver, onDrop, isDragging, isDropTarget }) {
@@ -61,8 +62,7 @@ export default function GospodarczyModule({ user }) {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_INTERVAL_MS);
   }, [refresh]);
 
   async function handleDelete(id) {

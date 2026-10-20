@@ -4,8 +4,9 @@ import SearchableSelect from './SearchableSelect.jsx';
 import JobCard from './JobCard.jsx';
 import EditJobModal from './EditJobModal.jsx';
 import { formatCzasSzacowany } from '../utils/jobTimeUtils.js';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_INTERVAL_MS = 4000;
+const POLL_INTERVAL_MS = 300000; // 5 min - istotne zdarzenia (przydzielenie, zakonczenie) i tak trafiaja mailem
 
 const KATEGORIE_NACZEP = [
   'Plandeka',
@@ -72,8 +73,7 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_INTERVAL_MS);
   }, [refresh]);
 
   // Historia zakonczonych zlecen - pobierana dopiero przy wejsciu w ta

@@ -4,8 +4,9 @@ import JobCard from '../components/JobCard.jsx';
 import CollapsiblePanel from '../components/CollapsiblePanel.jsx';
 import JobZdjecie from '../components/JobZdjecie.jsx';
 import FollowUpPanel from '../components/FollowUpPanel.jsx';
+import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
-const POLL_INTERVAL_MS = 4000;
+const POLL_INTERVAL_MS = 300000; // 5 min - istotne zdarzenia (przydzielenie, zakonczenie) i tak trafiaja mailem
 
 // Zmniejsza zdjecie z aparatu telefonu przed wyslaniem na serwer (max szerokosc
 // 1000px, jpeg q=0.65) - surowe zdjecia z telefonu to kilka MB, co zapchaloby
@@ -156,8 +157,7 @@ export default function Mechanic({ user, embedded = false }) {
   useEffect(() => {
     refresh();
     api.getPredefiniowanePrace().then(setPredefiniowane).catch((err) => setError(err.message));
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPollingWhenVisible(refresh, POLL_INTERVAL_MS);
   }, [refresh]);
 
   async function handleStatus(jobId, status) {
