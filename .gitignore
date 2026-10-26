@@ -5,4 +5,4 @@ node_modules/
 dist/
 build/
 *.log
-.claude/skills/frontend-design/
+.claude/
