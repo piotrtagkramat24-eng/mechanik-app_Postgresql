@@ -9,6 +9,8 @@ import EditJobModal from '../components/EditJobModal.jsx';
 import JobZdjecie from '../components/JobZdjecie.jsx';
 import JobCzynnosciList, { parseCzynnosci } from '../components/JobCzynnosciList.jsx';
 import FollowUpPanel from '../components/FollowUpPanel.jsx';
+import Icon from '../components/Icon.jsx';
+import { confirmDialog } from '../components/ConfirmDialog.jsx';
 import UstawieniaPanel from '../components/UstawieniaPanel.jsx';
 import Raporty from './Raporty.jsx';
 import { formatCzasSzacowany } from '../utils/jobTimeUtils.js';
@@ -41,32 +43,75 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
   // dokladnie te sama liczbe - wiec zbiorczy pasek pokazujemy tylko przy 0
   // czynnosci (stare zlecenia bez rozbicia, gdzie to jedyny pasek) albo przy
   // 2+ czynnosciach (wtedy ma sens jako podsumowanie calego zlecenia).
-  const liczbaCzynnosci = parseCzynnosci(job).length;
-  const pokazZbiorczyPasek = liczbaCzynnosci !== 1;
+  //
+  // Opisy (lista czynnosci / opis zlecenia + "Do zgloszenia") sa domyslnie
+  // ZWINIETE do jednej linii podgladu, zeby karty na tablicy byly krotkie -
+  // rozwija sie je kliknieciem. Przy zwinietej karcie lacznego paska nic nie
+  // dubluje, wiec pokazujemy go zawsze (takze przy 1 czynnosci).
+  const [opisRozwiniety, setOpisRozwiniety] = useState(false);
+  const czynnosci = parseCzynnosci(job);
+  const liczbaCzynnosci = czynnosci.length;
+  const pokazZbiorczyPasek = !opisRozwiniety || liczbaCzynnosci !== 1;
+  const podgladOpisu = liczbaCzynnosci > 0
+    ? czynnosci.map(c => c.Nazwa).join(', ')
+    : (job.Opis || '');
+  const czyJestOpis = !!(podgladOpisu || job.OpisWykonania);
+  const zakonczoneCzynnosci = czynnosci.filter(c => c.Status === 'zakonczone').length;
 
   return (
     <div
-      className={`kb-card ${isDragging ? 'kb-card--dragging' : ''}`}
+      className={`kb-card kb-card--${job.Status} ${isDragging ? 'kb-card--dragging' : ''}`}
       {...dragHandlers}
     >
       <div className="kb-card-drag-handle" title="Przeciągnij aby zmienić kolejność lub mechanika">
-        ⠿
+        <Icon name="grip" size={14} />
       </div>
       <div className="kb-card-body">
         <div className="kb-card-title">
-          {job.Marka} {job.Model}
+          <span className="kb-card-title-car" title={`${job.Marka} ${job.Model}`}>{job.Marka} {job.Model}</span>
           <span className="kb-card-reg">{job.Rejestracja}</span>
         </div>
-        <div className="kb-card-opis"><JobCzynnosciList job={job} /></div>
-        {pokazZbiorczyPasek && formatCzasSzacowany(job) && (
+        {czyJestOpis && (
+          <button
+            type="button"
+            className={`kb-card-opis-toggle ${opisRozwiniety ? 'kb-card-opis-toggle--open' : ''}`}
+            onClick={() => setOpisRozwiniety(o => !o)}
+            aria-expanded={opisRozwiniety}
+            title={opisRozwiniety ? 'Zwiń opis' : 'Rozwiń opis'}
+          >
+            <svg className="kb-card-opis-toggle-chevron" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {opisRozwiniety ? (
+              <span className="kb-card-opis-toggle-text">Zwiń szczegóły</span>
+            ) : (
+              <span className="kb-card-opis-toggle-text kb-card-opis-toggle-text--preview">{podgladOpisu || 'Do zgłoszenia'}</span>
+            )}
+            {!opisRozwiniety && job.OpisWykonania && (
+              <span className="kb-card-opis-toggle-pill kb-card-opis-toggle-pill--note" title="Jest opis do zgłoszenia"><Icon name="note" size={12} /></span>
+            )}
+            {liczbaCzynnosci > 1 && (
+              <span className="kb-card-opis-toggle-pill" title="Wykonane czynności">{zakonczoneCzynnosci}/{liczbaCzynnosci}</span>
+            )}
+          </button>
+        )}
+        {opisRozwiniety && (
+          <>
+            <div className="kb-card-opis"><JobCzynnosciList job={job} /></div>
+            {job.OpisWykonania && (
+              <div className="kb-card-wykonanie"><span className="kb-card-wykonanie-label"><Icon name="note" size={12} /> Do zgłoszenia:</span> {job.OpisWykonania}</div>
+            )}
+          </>
+        )}
+        {/* Po rozpoczeciu pracy szacowany czas widac w etykiecie paska
+            ("W trakcie: 1h / szac. 2h"), wiec osobna linie pokazujemy tylko
+            dla zlecen jeszcze nierozpoczetych. */}
+        {pokazZbiorczyPasek && !(job.Status === 'rozpoczete' && job.DataRozpoczecia) && formatCzasSzacowany(job) && (
           <div className="kb-card-czas">
-            ⏱ {liczbaCzynnosci >= 2 ? 'Szac. czas (łącznie)' : 'Szac. czas'}: {formatCzasSzacowany(job)}
+            {liczbaCzynnosci >= 2 ? 'Szac. czas łącznie' : 'Szac. czas'} <strong>{formatCzasSzacowany(job)}</strong>
           </div>
         )}
         {pokazZbiorczyPasek && <ElapsedTimeBar job={job} />}
-        {job.OpisWykonania && (
-          <div className="kb-card-wykonanie"><span className="kb-card-wykonanie-label">📝 Do zgłoszenia:</span> {job.OpisWykonania}</div>
-        )}
         {job.MaZdjecie ? <JobZdjecie jobId={job.Id} /> : null}
         <div className="kb-card-footer">
           <StatusBadge status={job.Status} />
@@ -76,19 +121,22 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
               className="kb-arrow-btn"
               onClick={() => onMove(job.Id, 'up')}
               title="Wyżej w kolejce"
-            >▲</button>
+              aria-label="Wyżej w kolejce"
+            ><Icon name="chevron-up" size={15} /></button>
             <button
               className="kb-arrow-btn"
               onClick={() => onMove(job.Id, 'down')}
               title="Niżej w kolejce"
-            >▼</button>
+              aria-label="Niżej w kolejce"
+            ><Icon name="chevron-down" size={15} /></button>
             {/* Przypisz do innego mechanika */}
             <div className="kb-reassign-wrap" ref={menuRef}>
               <button
                 className="kb-arrow-btn kb-arrow-btn--reassign"
                 onClick={() => setMenuOpen(o => !o)}
                 title="Zmień mechanika"
-              >↔</button>
+                aria-label="Zmień mechanika"
+              ><Icon name="swap" size={14} /></button>
               {menuOpen && (
                 <div className="kb-reassign-menu">
                   <div className="kb-reassign-title">Przenieś do:</div>
@@ -102,17 +150,17 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
                         title={m.NaUrlopie ? 'Osoba na urlopie - nie można przydzielić' : undefined}
                         onClick={() => { if (m.NaUrlopie) return; onReassign(job.Id, m.Id); setMenuOpen(false); }}
                       >
-                        {m.FullName}{m.NaUrlopie ? ' 🏖️ (urlop)' : ''}
+                        {m.FullName}{m.NaUrlopie ? ' (urlop)' : ''}
                       </button>
                     ))}
                 </div>
               )}
             </div>
             {onEdit && (
-              <button className="kb-arrow-btn" onClick={() => onEdit(job)} title="Edytuj robotę">✏️</button>
+              <button className="kb-arrow-btn" onClick={() => onEdit(job)} title="Edytuj robotę" aria-label="Edytuj robotę"><Icon name="pencil" size={14} /></button>
             )}
             {onDelete && !confirmingDelete && (
-              <button className="kb-arrow-btn" onClick={() => setConfirmingDelete(true)} title="Usuń robotę">🗑️</button>
+              <button className="kb-arrow-btn kb-arrow-btn--danger" onClick={() => setConfirmingDelete(true)} title="Usuń robotę" aria-label="Usuń robotę"><Icon name="trash" size={14} /></button>
             )}
             {onDelete && confirmingDelete && (
               <span className="kb-delete-confirm">
@@ -128,7 +176,8 @@ function KanbanCard({ job, colMechanikId, mechanicy, onMove, onReassign, isDragg
   );
 }
 
-const PO_NAPRAWIE_IKONY = { wyposazenie: '📦', mycie: '🚿' };
+const PO_NAPRAWIE_IKONA_NAZWA = { wyposazenie: 'package', mycie: 'droplets' };
+const poNaprawieIkona = (typ, size = 14) => <Icon name={PO_NAPRAWIE_IKONA_NAZWA[typ] || 'bell'} size={size} />;
 const PO_NAPRAWIE_ETYKIETY = { wyposazenie: 'Wyposażenie + Inspecto', mycie: 'Mycie' };
 
 // Male znaczniki na karcie ZAKONCZONEGO zlecenia pokazujace, czy dalsze kroki
@@ -149,7 +198,7 @@ function PoNaprawieStatusBadges({ jobId, statusPoNaprawiePerJob }) {
           className={`kb-done-ponaprawie-badge ${status[typ].wykonano ? 'kb-done-ponaprawie-badge--ok' : 'kb-done-ponaprawie-badge--pending'}`}
           title={PO_NAPRAWIE_ETYKIETY[typ] || typ}
         >
-          {PO_NAPRAWIE_IKONY[typ] || '🔔'} {PO_NAPRAWIE_ETYKIETY[typ] || typ}: {status[typ].wykonano ? '✓ wykonane' : '⏳ czeka na mechanika'}
+          {poNaprawieIkona(typ, 13)} {PO_NAPRAWIE_ETYKIETY[typ] || typ}: {status[typ].wykonano ? <><Icon name="check" size={13} /> wykonane</> : <><Icon name="hourglass" size={13} /> czeka na mechanika</>}
         </span>
       ))}
     </div>
@@ -165,10 +214,14 @@ function PoNaprawieStatusBadges({ jobId, statusPoNaprawiePerJob }) {
 // (patrz FollowUpPanel.jsx), ale kierownik/szef moze je tutaj usunac z tablicy
 // (np. gdy powstalo przez pomylke albo juz nie jest potrzebne).
 function PoNaprawieCard({ zadanie, onDelete }) {
-  function handleDelete() {
-    if (!window.confirm(`Usunąć zadanie „${zadanie.TypLabel || zadanie.Typ}” (${zadanie.Marka} ${zadanie.Model} ${zadanie.Rejestracja}) z tablicy?`)) {
-      return;
-    }
+  async function handleDelete() {
+    const ok = await confirmDialog({
+      title: `Usunąć zadanie „${zadanie.TypLabel || zadanie.Typ}”?`,
+      message: `${zadanie.Marka} ${zadanie.Model} ${zadanie.Rejestracja} — zadanie zniknie z tablicy.`,
+      confirmLabel: 'Usuń zadanie',
+      danger: true,
+    });
+    if (!ok) return;
     onDelete(zadanie.Id);
   }
 
@@ -176,14 +229,14 @@ function PoNaprawieCard({ zadanie, onDelete }) {
     <div className={`kb-card kb-card--ponaprawie kb-card--ponaprawie-${zadanie.Typ}`}>
       <div className="kb-card-body">
         <div className="kb-card-title">
-          <span className="kb-card-ponaprawie-ikona">{PO_NAPRAWIE_IKONY[zadanie.Typ] || '🔔'}</span>
+          <span className="kb-card-ponaprawie-ikona">{poNaprawieIkona(zadanie.Typ, 15)}</span>
           {zadanie.TypLabel || zadanie.Typ}
           <span className="kb-card-reg">{zadanie.Rejestracja}</span>
         </div>
         <div className="kb-card-opis">{zadanie.Marka} {zadanie.Model}{zadanie.Opis ? ` — ${zadanie.Opis}` : ''}</div>
         <div className="kb-card-footer">
           <span className="kb-card-ponaprawie-status" title="Może oznaczyć jako wykonane wyłącznie przypisany mechanik">
-            ⏳ Czeka na wykonanie przez mechanika
+            <Icon name="hourglass" size={13} /> Czeka na wykonanie przez mechanika
           </span>
           {onDelete && (
             <button
@@ -191,8 +244,9 @@ function PoNaprawieCard({ zadanie, onDelete }) {
               className="kb-card-ponaprawie-usun"
               title="Usuń to zadanie z tablicy"
               onClick={handleDelete}
+              aria-label="Usuń to zadanie z tablicy"
             >
-              ✕
+              <Icon name="x" size={14} />
             </button>
           )}
         </div>
@@ -282,11 +336,11 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
         <div className="kb-col-avatar" style={{ background: color }}>{initials}</div>
         <div className="kb-col-name">{mechanik.FullName}</div>
         <div className="kb-col-status-icons">
-          {pracujeTeraz && <span title="W trakcie pracy" className="kb-col-icon">🔧</span>}
-          {maWyposazenie && <span title="Do zrobienia: Wyposażenie + Inspecto" className="kb-col-icon">📦</span>}
-          {maMycie && <span title="Do zrobienia: Mycie" className="kb-col-icon">🚿</span>}
+          {pracujeTeraz && <span title="W trakcie pracy" className="kb-col-icon kb-col-icon--praca"><Icon name="wrench" size={14} /></span>}
+          {maWyposazenie && <span title="Do zrobienia: Wyposażenie + Inspecto" className="kb-col-icon kb-col-icon--wyposazenie"><Icon name="package" size={14} /></span>}
+          {maMycie && <span title="Do zrobienia: Mycie" className="kb-col-icon kb-col-icon--mycie"><Icon name="droplets" size={14} /></span>}
           {!pracujeTeraz && !maWyposazenie && !maMycie && !naUrlopie && (
-            <span title="Wolny" className="kb-col-icon kb-col-icon--free">🟢</span>
+            <span title="Wolny" className="kb-col-icon kb-col-icon--free"><span className="kb-col-free-dot" /></span>
           )}
           {/* Urlop - superadmin/szef moga kliknac, zeby przelaczyc; kierownik
               widzi tylko ikone (bez mozliwosci klikniecia) - patrz wymaganie:
@@ -297,16 +351,18 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
               className={`kb-col-icon kb-col-icon--urlop-btn ${naUrlopie ? 'kb-col-icon--urlop-on' : ''}`}
               title={naUrlopie ? 'Na urlopie - kliknij, aby cofnąć' : 'Oznacz jako na urlopie'}
               onClick={() => onToggleUrlop(mechanik.Id, !naUrlopie)}
+              aria-label={naUrlopie ? 'Na urlopie - kliknij, aby cofnąć' : 'Oznacz jako na urlopie'}
+              aria-pressed={naUrlopie}
             >
-              🏖️
+              <Icon name="sun" size={14} />
             </button>
           ) : (
-            naUrlopie && <span title="Na urlopie" className="kb-col-icon kb-col-icon--urlop-on">🏖️</span>
+            naUrlopie && <span title="Na urlopie" className="kb-col-icon kb-col-icon--urlop-on"><Icon name="sun" size={14} /></span>
           )}
         </div>
       </div>
       {naUrlopie && (
-        <div className="kb-column-urlop-banner">🏖️ Na urlopie — nie można przydzielać nowych zadań</div>
+        <div className="kb-column-urlop-banner"><Icon name="sun" size={13} /> Na urlopie — nie można przydzielać nowych zadań</div>
       )}
 
       {/* Zadania po naprawie sa ZAWSZE niewykonane (backend zwraca tylko
@@ -386,16 +442,24 @@ function KanbanColumn({ mechanik, color, jobs, allMechanicy, poNaprawie = [], st
                 <PoNaprawieStatusBadges jobId={job.Id} statusPoNaprawiePerJob={statusPoNaprawiePerJob} />
                 {job.OpisWykonania && (
                   <div className="kb-card-wykonanie">
-                    <span className="kb-card-wykonanie-label">📝 Do zgłoszenia:</span> {job.OpisWykonania}
+                    <span className="kb-card-wykonanie-label"><Icon name="note" size={12} /> Do zgłoszenia:</span> {job.OpisWykonania}
                   </div>
                 )}
                 {job.MaZdjecie ? <JobZdjecie jobId={job.Id} /> : null}
                 {onDelete && (
                   <button
                     className="btn btn-secondary btn-small kb-done-delete"
-                    onClick={() => { if (window.confirm('Czy na pewno chcesz usunąć tę robotę? Tej operacji nie można cofnąć.')) onDelete(job.Id); }}
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: 'Usunąć tę robotę?',
+                        message: `${job.Marka} ${job.Model} ${job.Rejestracja} — tej operacji nie można cofnąć.`,
+                        confirmLabel: 'Usuń robotę',
+                        danger: true,
+                      });
+                      if (ok) onDelete(job.Id);
+                    }}
                   >
-                    🗑️ Usuń
+                    <Icon name="trash" size={14} /> Usuń
                   </button>
                 )}
               </div>
@@ -466,6 +530,21 @@ export default function Manager({
   const [wybor, setWybor] = useState({});
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('nowe');
+  // Menu "hamburger" na telefonach - rozwijana lista zakladek
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); }
+    function onKey(e) { if (e.key === 'Escape') setMenuOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [menuOpen]);
+  function wybierzZakladke(key) {
+    setActiveTab(key);
+    setMenuOpen(false);
+  }
   const [kanbanFilter, setKanbanFilter] = useState('wszystkie');
   // Sortowanie/filtrowanie zakonczonych zlecen na Tablicy mechanikow (patrz
   // getJobsForMechanik nizej) - domyslnie sortujemy wg daty DODANIA, malejaco
@@ -655,6 +734,20 @@ export default function Manager({
 
   const noweJobs = jobs.filter(j => j.Status === 'nowe');
 
+  // Jedna lista zakladek - z niej rysowany jest i poziomy pasek (komputer),
+  // i rozwijane menu "hamburger" (telefon).
+  const zakladki = [
+    showWarsztat && { key: 'warsztat', icon: 'wrench', label: 'Warsztat' },
+    { key: 'nowe', icon: 'inbox', label: 'Do przydzielenia', badge: noweJobs.length },
+    { key: 'kanban', icon: 'columns', label: 'Tablica mechaników' },
+    showMojeZlecenia && { key: 'moje', icon: 'clipboard', label: 'Moje zlecenia' },
+    showDodaj && { key: 'dodaj', icon: 'plus', label: 'Nowe zlecenie' },
+    showGospodarczy && { key: 'gospodarczy', icon: 'brush', label: 'Pracownik gospodarczy' },
+    showRaporty && { key: 'raporty', icon: 'chart', label: 'Raporty' },
+    showUstawienia && { key: 'ustawienia', icon: 'settings', label: 'Ustawienia' },
+  ].filter(Boolean);
+  const aktywnaZakladka = zakladki.find(t => t.key === activeTab);
+
   // Mapa JobId -> { [typ]: { wykonano, dataWykonania } } na podstawie
   // statusZadanPoNaprawie (WSZYSTKIE zadania, nie tylko niewykonane) - uzywana
   // do pokazania na karcie zakonczonego zlecenia informacji, czy Wyposazenie+
@@ -716,71 +809,39 @@ export default function Manager({
     <div className="manager-root">
       {error && <div className="error-message mgr-error">{error}</div>}
 
-      {/* Główne taby — widoczność zależy od roli (patrz propsy komponentu) */}
-      <div className="mgr-tabs">
-        {showWarsztat && (
-          <button
-            className={`mgr-tab ${activeTab === 'warsztat' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('warsztat')}
-          >
-            🔧 Warsztat
-          </button>
-        )}
+      {/* Główne taby — widoczność zależy od roli (patrz propsy komponentu).
+          Na telefonie (<=700px) chowaja sie pod przyciskiem "hamburger". */}
+      <div className={`mgr-nav ${menuOpen ? 'mgr-nav--open' : ''}`} ref={menuRef}>
         <button
-          className={`mgr-tab ${activeTab === 'nowe' ? 'mgr-tab--active' : ''}`}
-          onClick={() => setActiveTab('nowe')}
+          type="button"
+          className="mgr-menu-toggle"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-expanded={menuOpen}
+          aria-controls="mgr-tabs-list"
         >
-          ✦ Do przydzielenia
-          {noweJobs.length > 0 && (
-            <span className="mgr-tab-badge">{noweJobs.length}</span>
+          <span className="mgr-menu-toggle-icon"><Icon name={menuOpen ? 'x' : 'menu'} size={20} /></span>
+          <span className="mgr-menu-toggle-current">
+            {aktywnaZakladka && <Icon name={aktywnaZakladka.icon} size={16} />}
+            {aktywnaZakladka ? aktywnaZakladka.label : 'Menu'}
+          </span>
+          {noweJobs.length > 0 && activeTab !== 'nowe' && (
+            <span className="mgr-tab-badge" title="Zlecenia do przydzielenia">{noweJobs.length}</span>
           )}
         </button>
-        <button
-          className={`mgr-tab ${activeTab === 'kanban' ? 'mgr-tab--active' : ''}`}
-          onClick={() => setActiveTab('kanban')}
-        >
-          📋 Tablica mechaników
-        </button>
-        {showMojeZlecenia && (
-          <button
-            className={`mgr-tab ${activeTab === 'moje' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('moje')}
-          >
-            🔩 Moje zlecenia
-          </button>
-        )}
-        {showDodaj && (
-          <button
-            className={`mgr-tab ${activeTab === 'dodaj' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('dodaj')}
-          >
-            + Nowe zlecenie
-          </button>
-        )}
-        {showGospodarczy && (
-          <button
-            className={`mgr-tab ${activeTab === 'gospodarczy' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('gospodarczy')}
-          >
-            🧹 Pracownik gospodarczy
-          </button>
-        )}
-        {showRaporty && (
-          <button
-            className={`mgr-tab ${activeTab === 'raporty' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('raporty')}
-          >
-            📊 Raporty
-          </button>
-        )}
-        {showUstawienia && (
-          <button
-            className={`mgr-tab ${activeTab === 'ustawienia' ? 'mgr-tab--active' : ''}`}
-            onClick={() => setActiveTab('ustawienia')}
-          >
-            ⚙️ Ustawienia
-          </button>
-        )}
+        <div className="mgr-tabs" id="mgr-tabs-list">
+          {zakladki.map(t => (
+            <button
+              key={t.key}
+              type="button"
+              className={`mgr-tab ${activeTab === t.key ? 'mgr-tab--active' : ''}`}
+              onClick={() => wybierzZakladke(t.key)}
+              aria-current={activeTab === t.key ? 'page' : undefined}
+            >
+              <Icon name={t.icon} /> {t.label}
+              {t.badge > 0 && <span className="mgr-tab-badge">{t.badge}</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       <FollowUpPanel user={user} />
@@ -803,54 +864,78 @@ export default function Manager({
       {activeTab === 'nowe' && (
         <div className="mgr-tab-content">
         <div className="page">
-          <div className="panel">
-            <p className="panel-hint">
-              Strzałkami możesz zmienić kolejność wykonania w kolejce.
-            </p>
-            <div className="job-list">
-              {noweJobs.length === 0 && <p>✓ Brak nowych zleceń do przydzielenia.</p>}
-              {noweJobs.map(job => (
-                <div key={job.Id} className="job-card">
-                  <div className="job-card-top">
-                    <strong>{job.Marka} {job.Model} · {job.Rejestracja}</strong>
-                    <StatusBadge status={job.Status} />
-                  </div>
-                  <p className="job-card-opis">{job.Opis}</p>
-                  <div className="job-card-meta">
-                    <span>Zgłosił: {job.UtworzonoPrzezFullName}</span>
-                    {formatCzasSzacowany(job) && (
-                      <span className="job-card-czas">⏱ Szac. czas: {formatCzasSzacowany(job)}</span>
-                    )}
-                  </div>
-                  <div className="job-card-actions">
-                    <select
-                      value={wybor[job.Id] || ''}
-                      onChange={e => setWybor({ ...wybor, [job.Id]: e.target.value })}
-                    >
-                      <option value="">-- wybierz mechanika --</option>
-                      {mechanicy.map(m => (
-                        <option key={m.Id} value={m.Id} disabled={!!m.NaUrlopie}>
-                          {m.FullName}{m.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="btn btn-primary" onClick={() => handleAssign(job.Id)}>
-                      Przydziel
-                    </button>
-                  </div>
-                  <div className="priority-nudge">
-                    <button className="priority-nudge-btn" onClick={() => handleMove(job.Id, 'up')} title="Wyżej w kolejce">
-                      ↑
-                    </button>
-                    <span className="priority-nudge-label">kolejność</span>
-                    <button className="priority-nudge-btn" onClick={() => handleMove(job.Id, 'down')} title="Niżej w kolejce">
-                      ↓
-                    </button>
-                  </div>
-                </div>
-              ))}
+          <section className="panel">
+            <div className="panel-head">
+              <span className="panel-head-icon"><Icon name="inbox" size={18} /></span>
+              <div className="panel-head-text">
+                <h2>Do przydzielenia <span className="panel-head-count">{noweJobs.length}</span></h2>
+                <p className="panel-head-sub">Wybierz mechanika i kliknij „Przydziel”. Strzałkami zmienisz kolejność w kolejce.</p>
+              </div>
             </div>
-          </div>
+            <div className="assign-list">
+              {noweJobs.length === 0 && (
+                <div className="empty-state-box">
+                  <span className="empty-state-box-icon"><Icon name="check-circle" size={28} strokeWidth={1.8} /></span>
+                  <strong>Wszystko przydzielone</strong>
+                  <span>Brak nowych zleceń czekających na mechanika.</span>
+                </div>
+              )}
+              {noweJobs.map((job, idx) => {
+                const czasSzac = formatCzasSzacowany(job);
+                const czynnosciJoba = parseCzynnosci(job);
+                return (
+                  <article key={job.Id} className="assign-card">
+                    <div className="assign-order">
+                      <button type="button" className="assign-order-btn" onClick={() => handleMove(job.Id, 'up')} disabled={idx === 0} title="Wyżej w kolejce" aria-label="Wyżej w kolejce">
+                        <Icon name="chevron-up" size={15} />
+                      </button>
+                      <span className="assign-order-num" title="Pozycja w kolejce">{idx + 1}</span>
+                      <button type="button" className="assign-order-btn" onClick={() => handleMove(job.Id, 'down')} disabled={idx === noweJobs.length - 1} title="Niżej w kolejce" aria-label="Niżej w kolejce">
+                        <Icon name="chevron-down" size={15} />
+                      </button>
+                    </div>
+
+                    <div className="assign-main">
+                      <div className="assign-title">
+                        <span className="assign-car">{job.Marka} {job.Model}</span>
+                        <span className="plate">{job.Rejestracja}</span>
+                      </div>
+                      {czynnosciJoba.length > 0 ? (
+                        <ul className="assign-czynnosci">
+                          {czynnosciJoba.map(c => <li key={c.Id}>{c.Nazwa}</li>)}
+                        </ul>
+                      ) : (
+                        job.Opis && <p className="assign-opis">{job.Opis}</p>
+                      )}
+                      <div className="assign-meta">
+                        <span className="meta-chip"><Icon name="user" size={13} /> {job.UtworzonoPrzezFullName}</span>
+                        {czasSzac && <span className="meta-chip meta-chip--accent"><Icon name="clock" size={13} /> {czasSzac}</span>}
+                      </div>
+                    </div>
+
+                    <div className="assign-actions">
+                      <label className="assign-label" htmlFor={`przydziel-${job.Id}`}>Mechanik</label>
+                      <select
+                        id={`przydziel-${job.Id}`}
+                        value={wybor[job.Id] || ''}
+                        onChange={e => setWybor({ ...wybor, [job.Id]: e.target.value })}
+                      >
+                        <option value="">Wybierz mechanika…</option>
+                        {mechanicy.map(m => (
+                          <option key={m.Id} value={m.Id} disabled={!!m.NaUrlopie}>
+                            {m.FullName}{m.NaUrlopie ? ' (na urlopie)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="btn btn-primary" onClick={() => handleAssign(job.Id)} disabled={!wybor[job.Id]}>
+                        <Icon name="user-plus" size={15} /> Przydziel
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         </div>
         </div>
       )}

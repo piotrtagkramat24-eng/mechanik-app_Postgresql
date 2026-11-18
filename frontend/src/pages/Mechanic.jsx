@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import Icon from '../components/Icon.jsx';
 import { api } from '../api.js';
 import JobCard from '../components/JobCard.jsx';
 import CollapsiblePanel from '../components/CollapsiblePanel.jsx';
@@ -69,7 +70,7 @@ function ZakonczModal({ job, onConfirm, onCancel }) {
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">Zakończ zlecenie</span>
-          <button className="modal-close" onClick={onCancel}>✕</button>
+          <button className="modal-close" onClick={onCancel} aria-label="Zamknij"><Icon name="x" size={16} /></button>
         </div>
         <div className="modal-body">
           <p className="modal-car">
@@ -107,7 +108,7 @@ function ZakonczModal({ job, onConfirm, onCancel }) {
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onCancel} disabled={wysylanie}>Anuluj</button>
           <button className="btn btn-success" onClick={handleConfirm} disabled={wysylanie || przetwarzanieZdjecia}>
-            {wysylanie ? 'Zapisywanie...' : '✓ Zakończ'}
+            {wysylanie ? 'Zapisywanie...' : <><Icon name="check" size={15} /> Zakończ</>}
           </button>
         </div>
       </div>
@@ -224,6 +225,70 @@ export default function Mechanic({ user, embedded = false }) {
   // jobs (z pollingu co 4s) nie zawiera ich juz w ogole.
   const zakonczone = completedJobs;
 
+  const panelWTrakcie = (
+    <CollapsiblePanel title="W trakcie" count={wTrakcie.length} defaultOpen={true}>
+      {wTrakcie.length === 0 && <p>Nie masz aktualnie rozpoczętych zleceń.</p>}
+      {wTrakcie.map((job) => (
+        <JobCard
+          key={job.Id}
+          job={job}
+          predefiniowane={predefiniowane}
+          allowAddCzynnosc
+          allowStatusChange
+          userId={user.Id}
+          onJobUpdated={refresh}
+          onStartCzynnosc={(czynnoscId) => handleStartCzynnosc(job.Id, czynnoscId)}
+          onFinishCzynnosc={(czynnoscId, jestOstatnia) => handleFinishCzynnosc(job, czynnoscId, jestOstatnia)}
+        />
+      ))}
+    </CollapsiblePanel>
+  );
+
+  const panelZakonczone = (
+    <CollapsiblePanel title="Zakończone" count={completedRequested ? zakonczone.length : 0} defaultOpen={false} onOpen={handleOpenZakonczone}>
+      {completedLoading && <p>Wczytywanie…</p>}
+      {!completedLoading && zakonczone.length === 0 && <p>Brak zakończonych zleceń.</p>}
+      {!completedLoading && zakonczone.map((job) => (
+        <div key={job.Id} className="job-card job-card--done">
+          <div className="job-card-top">
+            <strong>{job.Marka} {job.Model} · {job.Rejestracja}</strong>
+            <span className="job-done-date">
+              {job.DataZakonczenia
+                ? new Date(job.DataZakonczenia).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                : ''}
+            </span>
+          </div>
+          <p className="job-card-opis">{job.Opis}</p>
+          {job.OpisWykonania && (
+            <div className="job-wykonanie-box">
+              <span className="job-wykonanie-label"><Icon name="note" size={13} /> Do zgłoszenia:</span>
+              <span className="job-wykonanie-text">{job.OpisWykonania}</span>
+            </div>
+          )}
+          {job.MaZdjecie ? <JobZdjecie jobId={job.Id} /> : null}
+        </div>
+      ))}
+    </CollapsiblePanel>
+  );
+
+  const panelPrzydzielone = (
+    <CollapsiblePanel title="Przydzielone" count={przydzielone.length} defaultOpen={true}>
+      {przydzielone.length === 0 && <p>Brak zleceń czekających na rozpoczęcie.</p>}
+      {przydzielone.map((job) => (
+        <JobCard
+          key={job.Id}
+          job={job}
+          predefiniowane={predefiniowane}
+          allowStatusChange
+          userId={user.Id}
+          onJobUpdated={refresh}
+          onStartCzynnosc={(czynnoscId) => handleStartCzynnosc(job.Id, czynnoscId)}
+          onFinishCzynnosc={(czynnoscId, jestOstatnia) => handleFinishCzynnosc(job, czynnoscId, jestOstatnia)}
+        />
+      ))}
+    </CollapsiblePanel>
+  );
+
   return (
     <div className="page">
       {error && <div className="error-message">{error}</div>}
@@ -238,66 +303,11 @@ export default function Mechanic({ user, embedded = false }) {
 
       {!embedded && <FollowUpPanel user={user} />}
 
-      {/* 1. W trakcie */}
-      <CollapsiblePanel title="W trakcie" count={wTrakcie.length} defaultOpen={true}>
-        {wTrakcie.length === 0 && <p>Nie masz aktualnie rozpoczętych zleceń.</p>}
-        {wTrakcie.map((job) => (
-          <JobCard
-            key={job.Id}
-            job={job}
-            predefiniowane={predefiniowane}
-            allowAddCzynnosc
-            allowStatusChange
-            userId={user.Id}
-            onJobUpdated={refresh}
-            onStartCzynnosc={(czynnoscId) => handleStartCzynnosc(job.Id, czynnoscId)}
-            onFinishCzynnosc={(czynnoscId, jestOstatnia) => handleFinishCzynnosc(job, czynnoscId, jestOstatnia)}
-          />
-        ))}
-      </CollapsiblePanel>
-
-      {/* 2. Zakończone — zaraz pod "W trakcie" */}
-      <CollapsiblePanel title="Zakończone" count={completedRequested ? zakonczone.length : 0} defaultOpen={false} onOpen={handleOpenZakonczone}>
-        {completedLoading && <p>Wczytywanie…</p>}
-        {!completedLoading && zakonczone.length === 0 && <p>Brak zakończonych zleceń.</p>}
-        {!completedLoading && zakonczone.map((job) => (
-          <div key={job.Id} className="job-card job-card--done">
-            <div className="job-card-top">
-              <strong>{job.Marka} {job.Model} · {job.Rejestracja}</strong>
-              <span className="job-done-date">
-                {job.DataZakonczenia
-                  ? new Date(job.DataZakonczenia).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-                  : ''}
-              </span>
-            </div>
-            <p className="job-card-opis">{job.Opis}</p>
-            {job.OpisWykonania && (
-              <div className="job-wykonanie-box">
-                <span className="job-wykonanie-label">📝 Do zgłoszenia:</span>
-                <span className="job-wykonanie-text">{job.OpisWykonania}</span>
-              </div>
-            )}
-            {job.MaZdjecie ? <JobZdjecie jobId={job.Id} /> : null}
-          </div>
-        ))}
-      </CollapsiblePanel>
-
-      {/* 3. Przydzielone */}
-      <CollapsiblePanel title="Przydzielone" count={przydzielone.length} defaultOpen={true}>
-        {przydzielone.length === 0 && <p>Brak zleceń czekających na rozpoczęcie.</p>}
-        {przydzielone.map((job) => (
-          <JobCard
-            key={job.Id}
-            job={job}
-            predefiniowane={predefiniowane}
-            allowStatusChange
-            userId={user.Id}
-            onJobUpdated={refresh}
-            onStartCzynnosc={(czynnoscId) => handleStartCzynnosc(job.Id, czynnoscId)}
-            onFinishCzynnosc={(czynnoscId, jestOstatnia) => handleFinishCzynnosc(job, czynnoscId, jestOstatnia)}
-          />
-        ))}
-      </CollapsiblePanel>
+      {/* Kolejnosc sekcji: u mechanika W trakcie -> Przydzielone -> Zakonczone
+          (zakonczone na samym dole); w widoku osadzonym (kierownik, zakladka
+          "Moje zlecenia") zostaje dotychczasowa: W trakcie -> Zakonczone -> Przydzielone. */}
+      {panelWTrakcie}
+      {embedded ? <>{panelZakonczone}{panelPrzydzielone}</> : <>{panelPrzydzielone}{panelZakonczone}</>}
     </div>
   );
 }

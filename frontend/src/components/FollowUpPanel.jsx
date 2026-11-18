@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
@@ -44,7 +45,7 @@ export default function FollowUpPanel({ user }) {
     <section className="followup-panel-compact">
       <button className="followup-toggle" onClick={() => setZwiniety((z) => !z)}>
         <span>Do wykonania po naprawie ({zadania.length})</span>
-        <span className="followup-toggle-arrow">{zwiniety ? '▸' : '▾'}</span>
+        <span className={`followup-toggle-arrow ${zwiniety ? '' : 'followup-toggle-arrow--open'}`}><Icon name="chevron-right" size={15} /></span>
       </button>
       {error && <div className="error-message">{error}</div>}
       {!zwiniety && (
@@ -55,7 +56,7 @@ export default function FollowUpPanel({ user }) {
               <span className="followup-row-car"><strong>{z.Marka} {z.Model}</strong> {z.Rejestracja}</span>
               <span className="followup-row-opis" title={z.Opis}>{z.Opis}</span>
               <button className="btn btn-success btn-small" onClick={() => handleWykonaj(z.Id)}>
-                ✓ Wykonane
+                <Icon name="check" size={14} /> Wykonane
               </button>
             </div>
           ))}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import JobCard from './JobCard.jsx';
@@ -214,15 +215,34 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
 
       <div className="panel-grid">
         <section className="panel">
-          <h2>Rejestracja pojazdu</h2>
-          <form onSubmit={handleAddCar} className="form">
-            <label>
-              Typ pojazdu
-              <select value={typPojazdu} onChange={(e) => setTypPojazdu(e.target.value)}>
-                <option value="samochod">Samochód</option>
-                <option value="naczepa">Naczepa</option>
-              </select>
-            </label>
+          <div className="panel-head">
+            <span className="panel-head-icon"><Icon name="car" size={18} /></span>
+            <div className="panel-head-text">
+              <h2>Rejestracja pojazdu</h2>
+              <p className="panel-head-sub">Dodaj auto lub naczepę do bazy, żeby móc otworzyć dla niej zlecenie.</p>
+            </div>
+          </div>
+          <form onSubmit={handleAddCar} className="form form--wide">
+            <div className="field">
+              <span className="field-label" id="typ-pojazdu-label">Typ pojazdu</span>
+              <div className="segmented" role="radiogroup" aria-labelledby="typ-pojazdu-label">
+                {[
+                  { value: 'samochod', label: 'Samochód', icon: 'car' },
+                  { value: 'naczepa', label: 'Naczepa', icon: 'truck' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={typPojazdu === t.value}
+                    className={`segmented-btn ${typPojazdu === t.value ? 'segmented-btn--active' : ''}`}
+                    onClick={() => setTypPojazdu(t.value)}
+                  >
+                    <Icon name={t.icon} size={16} /> {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {typPojazdu === 'naczepa' && (
               <label>
                 Kategoria naczepy
@@ -234,31 +254,44 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
                 </select>
               </label>
             )}
-            <label>
-              Marka
-              <input value={marka} onChange={(e) => setMarka(e.target.value)} required />
-            </label>
-            <label>
-              Model
-              <input value={model} onChange={(e) => setModel(e.target.value)} required />
-            </label>
+            <div className="form-row-2">
+              <label>
+                Marka
+                <input value={marka} onChange={(e) => setMarka(e.target.value)} placeholder="np. Mercedes-Benz" required />
+              </label>
+              <label>
+                Model
+                <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="np. Actros" required />
+              </label>
+            </div>
             <label>
               Numer rejestracyjny
               <input
+                className="input-plate"
                 value={rejestracja}
                 onChange={(e) => setRejestracja(e.target.value)}
+                placeholder="WX 12345"
+                autoCapitalize="characters"
                 required
               />
             </label>
-            <button className="btn btn-primary" type="submit">
-              Dodaj pojazd
-            </button>
+            <div className="form-footer">
+              <button className="btn btn-primary" type="submit">
+                <Icon name="plus" size={16} /> Dodaj pojazd
+              </button>
+            </div>
           </form>
         </section>
 
         <section className="panel">
-          <h2>Nowe zlecenie serwisowe</h2>
-          <form onSubmit={handleAddJob} className="form">
+          <div className="panel-head">
+            <span className="panel-head-icon"><Icon name="file-plus" size={18} /></span>
+            <div className="panel-head-text">
+              <h2>Nowe zlecenie serwisowe</h2>
+              <p className="panel-head-sub">Wybierz pojazd i prace do wykonania — zlecenie trafi do „Do przydzielenia”.</p>
+            </div>
+          </div>
+          <form onSubmit={handleAddJob} className="form form--wide">
             <div className="field">
               <label id="dodaj-robote-pojazd-label">Pojazd</label>
               <SearchableSelect
@@ -298,8 +331,9 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
                         className="wybrana-praca-chip-remove"
                         onClick={() => handleRemoveWybranaPraca(pr.Id)}
                         title="Usuń z listy"
+                        aria-label={`Usuń ${pr.Nazwa} z listy`}
                       >
-                        ×
+                        <Icon name="x" size={13} />
                       </button>
                     </span>
                   ))}
@@ -329,16 +363,24 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
                 />
               </label>
             )}
-            <button className="btn btn-primary" type="submit">
-              Utwórz zlecenie{wybranePrace.length > 1 ? ` (${wybranePrace.length} czynności)` : ''}
-            </button>
+            <div className="form-footer">
+              <button className="btn btn-primary" type="submit">
+                <Icon name="check" size={16} /> Utwórz zlecenie{wybranePrace.length > 1 ? ` (${wybranePrace.length} czynności)` : ''}
+              </button>
+            </div>
           </form>
         </section>
       </div>
 
       {showJobList && (
         <section className="panel">
-          <h2>Zlecenia aktywne ({jobs.length})</h2>
+          <div className="panel-head">
+            <span className="panel-head-icon"><Icon name="clipboard" size={18} /></span>
+            <div className="panel-head-text">
+              <h2>Zlecenia aktywne <span className="panel-head-count">{jobs.length}</span></h2>
+              <p className="panel-head-sub">Wszystkie otwarte zlecenia warsztatu — od nowych po te w trakcie.</p>
+            </div>
+          </div>
           <div className="inner-tabs">
             {STATUS_TABS.map((tab) => {
               // "zakonczone" liczone z osobnego, pobieranego na zadanie zrodla -
@@ -360,8 +402,8 @@ export default function DodajRobotePanel({ user, showJobList = true }) {
             })}
           </div>
           <div className="job-list">
-            {statusFilter === 'zakonczone' && completedLoading && <p>Wczytywanie…</p>}
-            {!(statusFilter === 'zakonczone' && completedLoading) && filteredJobs.length === 0 && <p>Brak robót w tej kategorii.</p>}
+            {statusFilter === 'zakonczone' && completedLoading && <p className="empty-hint">Wczytywanie…</p>}
+            {!(statusFilter === 'zakonczone' && completedLoading) && filteredJobs.length === 0 && <p className="empty-hint">Brak robót w tej kategorii.</p>}
             {!(statusFilter === 'zakonczone' && completedLoading) && filteredJobs.map((job) => (
               <JobCard
                 key={job.Id}

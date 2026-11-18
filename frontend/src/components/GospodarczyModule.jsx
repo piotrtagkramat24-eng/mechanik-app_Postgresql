@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 import GospodarczyForm from './GospodarczyForm.jsx';
 import GospodarczyTaskCard from './GospodarczyTaskCard.jsx';
@@ -22,8 +23,8 @@ function GospodarczyTaskCardSorted({ task, showPracownik, onDelete, onEdit, onMo
     >
       <div className="gosp-sort-handle" title="Przeciągnij, aby zmienić kolejność">⠿</div>
       <div className="gosp-sort-arrows">
-        <button className="kb-arrow-btn" onClick={() => onMove(task.Id, 'up')} title="Wyżej">▲</button>
-        <button className="kb-arrow-btn" onClick={() => onMove(task.Id, 'down')} title="Niżej">▼</button>
+        <button className="kb-arrow-btn" onClick={() => onMove(task.Id, 'up')} title="Wyżej" aria-label="Wyżej"><Icon name="chevron-up" size={15} /></button>
+        <button className="kb-arrow-btn" onClick={() => onMove(task.Id, 'down')} title="Niżej" aria-label="Niżej"><Icon name="chevron-down" size={15} /></button>
       </div>
       <div className="gosp-sort-card-wrap">
         <GospodarczyTaskCard task={task} showPracownik={showPracownik} onDelete={onDelete} onEdit={onEdit} />
@@ -129,11 +130,11 @@ export default function GospodarczyModule({ user }) {
 
       <div className="inner-tabs">
         <button className={`inner-tab ${innerTab === 'lista' ? 'inner-tab--active' : ''}`}
-          onClick={() => { setEditingTask(null); setInnerTab('lista'); }}>📋 Lista zadań</button>
+          onClick={() => { setEditingTask(null); setInnerTab('lista'); }}><Icon name="list" size={15} /> Lista zadań</button>
         <button className={`inner-tab ${innerTab === 'kalendarz' ? 'inner-tab--active' : ''}`}
-          onClick={() => { setEditingTask(null); setInnerTab('kalendarz'); }}>📅 Kalendarz</button>
+          onClick={() => { setEditingTask(null); setInnerTab('kalendarz'); }}><Icon name="calendar" size={15} /> Kalendarz</button>
         <button className={`inner-tab ${innerTab === 'dodaj' ? 'inner-tab--active' : ''}`}
-          onClick={() => { setEditingTask(null); setInnerTab('dodaj'); }}>+ Nowe zadanie</button>
+          onClick={() => { setEditingTask(null); setInnerTab('dodaj'); }}><Icon name="plus" size={15} /> Nowe zadanie</button>
       </div>
 
       {innerTab === 'dodaj' && (
@@ -182,7 +183,7 @@ export default function GospodarczyModule({ user }) {
 
           <section className="panel">
             <h2>Kolejność zadań ({aktywne.length})</h2>
-            <p className="panel-hint">Przeciągnij lub użyj strzałek ▲▼ aby zmienić kolejność wykonywania.</p>
+            <p className="panel-hint">Przeciągnij lub użyj strzałek aby zmienić kolejność wykonywania.</p>
             {aktywne.length === 0 && <p>Brak aktywnych zadań.</p>}
             <div className="gosp-sort-list"
               onDragLeave={() => setDropTargetId(null)}>

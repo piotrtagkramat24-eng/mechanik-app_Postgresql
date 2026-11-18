@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Icon from '../components/Icon.jsx';
 import { api } from '../api.js';
 import GospodarczyCalendar from '../components/GospodarczyCalendar.jsx';
 import PriorityBadge from '../components/PriorityBadge.jsx';
@@ -17,8 +18,8 @@ function formatDate(value) {
 }
 
 const TASK_ICONS = {
-  sprzatanie: '🧹', konserwacja: '🔧', dostawa: '📦',
-  mycie: '🚿', kontrola: '🔍', default: '📋',
+  sprzatanie: 'brush', konserwacja: 'wrench', dostawa: 'package',
+  mycie: 'droplets', kontrola: 'search', default: 'clipboard',
 };
 function taskIcon(name) {
   const n = (name || '').toLowerCase();
@@ -80,15 +81,15 @@ function TodayCard({ task, onWykonaj }) {
 
   let termBadge = null;
   if (wyszarzale) {
-    termBadge = <span className="done-badge">✓ Wykonane</span>;
+    termBadge = <span className="done-badge"><Icon name="check" size={13} /> Wykonane</span>;
   } else if (dni !== null && dni !== undefined) {
-    if (dni < 0)      termBadge = <span className="overdue-badge">⚠ Przeterminowane o {Math.abs(dni)} dni</span>;
-    else if (dni === 0) termBadge = <span className="today-badge">⏰ Termin dzisiaj</span>;
+    if (dni < 0)      termBadge = <span className="overdue-badge"><Icon name="alert" size={13} /> Przeterminowane o {Math.abs(dni)} dni</span>;
+    else if (dni === 0) termBadge = <span className="today-badge"><Icon name="clock" size={13} /> Termin dzisiaj</span>;
   }
 
   return (
     <div className={`gosp-today-card gosp-today-card--${wyszarzale ? 'done' : priorytet}`}>
-      <div className="gosp-today-card-icon">{taskIcon(task.Zadanie)}</div>
+      <div className="gosp-today-card-icon"><Icon name={taskIcon(task.Zadanie)} size={20} /></div>
       <div className="gosp-today-card-body">
         <div className="gosp-today-card-title">
           {task.Zadanie}
@@ -99,7 +100,7 @@ function TodayCard({ task, onWykonaj }) {
           {termBadge}
         </div>
         <div className="gosp-today-card-meta">
-          {task.Lokalizacja && <span>📍 {task.Lokalizacja}</span>}
+          {task.Lokalizacja && <span className="icon-line"><Icon name="map-pin" size={13} /> {task.Lokalizacja}</span>}
           <span>Następny termin: {formatDate(task.NastepnyTermin)}</span>
           <span>Ostatnio: {formatDate(task.DataOstatniegoWykonania)}</span>
         </div>
@@ -116,14 +117,14 @@ function TodayCard({ task, onWykonaj }) {
                     className={`btn-toggle btn-toggle--ok ${statusy[r.Id] === true ? 'btn-toggle--active' : ''}`}
                     onClick={() => setStatusRej(r.Id, true)}
                   >
-                    ✓ Wykonano
+                    <Icon name="check" size={15} /> Wykonano
                   </button>
                   <button
                     type="button"
                     className={`btn-toggle btn-toggle--bad ${statusy[r.Id] === false ? 'btn-toggle--active' : ''}`}
                     onClick={() => setStatusRej(r.Id, false)}
                   >
-                    ✗ Nie wykonano
+                    <Icon name="x" size={15} /> Nie wykonano
                   </button>
                 </div>
               </div>
@@ -143,7 +144,7 @@ function TodayCard({ task, onWykonaj }) {
               disabled={!wszystkieOznaczone}
               title={!wszystkieOznaczone ? 'Zaznacz „Wykonano” lub „Nie wykonano” dla każdego numeru rejestracyjnego' : ''}
             >
-              ✓ Oznacz jako wykonane
+              <Icon name="check" size={15} /> Oznacz jako wykonane
             </button>
           </div>
         )}
@@ -269,10 +270,10 @@ export default function Gospodarczy({ user }) {
 
       {/* Przełącznik widoku — główne przyciski na stronie pracownika */}
       <div className="gosp-view-switcher">
-        <ViewBtn active={widok === 'dzisiaj'} onClick={() => setWidok('dzisiaj')}>⚡ Dziś</ViewBtn>
-        <ViewBtn active={widok === '7dni'} onClick={() => setWidok('7dni')}>📅 7 dni</ViewBtn>
-        <ViewBtn active={widok === '30dni'} onClick={() => setWidok('30dni')}>🗓️ 30 dni</ViewBtn>
-        <ViewBtn active={widok === 'kalendarz'} onClick={() => setWidok('kalendarz')}>📆 Kalendarz</ViewBtn>
+        <ViewBtn active={widok === 'dzisiaj'} onClick={() => setWidok('dzisiaj')}><Icon name="zap" size={15} /> Dziś</ViewBtn>
+        <ViewBtn active={widok === '7dni'} onClick={() => setWidok('7dni')}><Icon name="calendar" size={15} /> 7 dni</ViewBtn>
+        <ViewBtn active={widok === '30dni'} onClick={() => setWidok('30dni')}><Icon name="calendar" size={15} /> 30 dni</ViewBtn>
+        <ViewBtn active={widok === 'kalendarz'} onClick={() => setWidok('kalendarz')}><Icon name="grid" size={15} /> Kalendarz</ViewBtn>
       </div>
 
       <FollowUpPanel user={user} />
@@ -282,7 +283,7 @@ export default function Gospodarczy({ user }) {
           <h2>{viewLabels[widok]}</h2>
           {tasksForView.length === 0 ? (
             <div className="gosp-empty-day">
-              <div className="gosp-empty-day-icon">✅</div>
+              <div className="gosp-empty-day-icon"><Icon name="check-circle" size={40} strokeWidth={1.6} /></div>
               <div className="gosp-empty-day-title">Brak zadań do wykonania</div>
               <div className="gosp-empty-day-sub">Wszystkie zadania w tym zakresie zostały wykonane.</div>
             </div>

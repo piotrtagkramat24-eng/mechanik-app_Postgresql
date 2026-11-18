@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useId } from 'react';
+import Icon from './Icon.jsx';
 
 /**
  * Wyszukiwalna lista rozwijana.
@@ -145,11 +146,11 @@ export default function SearchableSelect({
             onKeyDown={handleInputKeyDown}
           />
         ) : (
-          <span className={selected ? '' : 'searchable-select-placeholder'}>
+          <span className={selected ? 'searchable-select-value' : 'searchable-select-placeholder'}>
             {selected ? selected.label : placeholder}
           </span>
         )}
-        <span className="searchable-select-arrow" aria-hidden="true">{open ? '▲' : '▼'}</span>
+        <span className={`searchable-select-arrow ${open ? 'searchable-select-arrow--open' : ''}`} aria-hidden="true"><Icon name="chevron-down" size={16} /></span>
       </div>
 
       {open && (

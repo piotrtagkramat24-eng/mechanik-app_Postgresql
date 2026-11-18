@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import Icon from './Icon.jsx';
 
 // --- helpers ---
 function todayMidnight() {
@@ -117,12 +118,12 @@ function TaskChip({ task, showPracownik }) {
       {open && (
         <div className="cal-chip-popup" onClick={e => e.stopPropagation()}>
           <strong>{task.Zadanie}</strong>
-          {task.Lokalizacja && <div>📍 {task.Lokalizacja}</div>}
-          {showPracownik && <div>👤 {task.PracownikFullName}</div>}
+          {task.Lokalizacja && <div className="icon-line"><Icon name="map-pin" size={13} /> {task.Lokalizacja}</div>}
+          {showPracownik && <div className="icon-line"><Icon name="user" size={13} /> {task.PracownikFullName}</div>}
           <div>Priorytet: {task.Priorytet}</div>
           <div>Typ: {task.Typ === 'cykliczne' ? `Co ${task.CoIleDni} dni` : 'Jednorazowe'}</div>
-          {isDone && <div className="cal-chip-done-label">✓ Zakończone</div>}
-          <button className="cal-chip-close" onClick={() => setOpen(false)}>✕</button>
+          {isDone && <div className="cal-chip-done-label"><Icon name="check" size={13} /> Zakończone</div>}
+          <button className="cal-chip-close" onClick={() => setOpen(false)} aria-label="Zamknij"><Icon name="x" size={14} /></button>
         </div>
       )}
     </div>
@@ -243,12 +244,12 @@ export default function GospodarczyCalendar({ tasks, showPracownik = false }) {
             onClick={() => setListMode(m => !m)}
             title={listMode ? 'Widok siatki' : 'Widok listy'}
           >
-            {listMode ? '⊞' : '☰'}
+            <Icon name={listMode ? 'grid' : 'list'} size={16} />
           </button>
           <div className="cal-nav">
-            <button className="cal-nav-btn" onClick={() => setOffset(o => o - 1)}>‹</button>
+            <button className="cal-nav-btn" onClick={() => setOffset(o => o - 1)} aria-label="Poprzedni"><Icon name="chevron-left" size={16} /></button>
             <span className="cal-nav-title">{title}</span>
-            <button className="cal-nav-btn" onClick={() => setOffset(o => o + 1)}>›</button>
+            <button className="cal-nav-btn" onClick={() => setOffset(o => o + 1)} aria-label="Następny"><Icon name="chevron-right" size={16} /></button>
             {offset !== 0 && (
               <button className="cal-nav-btn cal-nav-today" onClick={() => setOffset(0)}>
                 Dzisiaj

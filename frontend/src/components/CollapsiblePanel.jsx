@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from './Icon.jsx';
 
 // onOpen (opcjonalny) - wywolywane dokladnie raz, przy PIERWSZYM rozwinieciu
 // panelu (przejsciu zamkniety -> otwarty) - uzywane np. do doladowania
@@ -26,7 +27,7 @@ export default function CollapsiblePanel({ title, count, defaultOpen = true, onO
         <span>
           {title} ({count})
         </span>
-        <span className="panel-toggle-icon">{open ? '▾' : '▸'}</span>
+        <span className={`panel-toggle-icon ${open ? 'panel-toggle-icon--open' : ''}`}><Icon name="chevron-right" size={15} /></span>
       </button>
 
       {open && <div className="job-list">{children}</div>}

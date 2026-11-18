@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import CzynnoscElapsedBar from './CzynnoscElapsedBar.jsx';
@@ -120,7 +121,7 @@ export default function JobCzynnosciList({
             const zakonczona = cz.Status === 'zakonczone';
             return (
               <li key={cz.Id} className={`job-czynnosci-item ${zakonczona ? 'job-czynnosci-item--zakonczone' : ''}`}>
-                <span className="job-czynnosci-dot">{zakonczona ? '✓' : '•'}</span>
+                <span className="job-czynnosci-dot">{zakonczona ? <Icon name="check" size={13} /> : '•'}</span>
                 <span className="job-czynnosci-nazwa">{cz.Nazwa}</span>
                 {czas && <span className="job-czynnosci-czas">{czas}</span>}
                 {allowRemove && (
@@ -129,8 +130,9 @@ export default function JobCzynnosciList({
                     className="job-czynnosci-remove"
                     onClick={() => handleRemove(cz.Id)}
                     title="Usuń czynność"
+                    aria-label="Usuń czynność"
                   >
-                    ×
+                    <Icon name="x" size={14} />
                   </button>
                 )}
                 {cz.DataRozpoczecia && <CzynnoscElapsedBar czynnosc={cz} harmonogram={harmonogram} />}
@@ -193,11 +195,11 @@ export default function JobCzynnosciList({
             />
             <button
               type="button"
-              className="btn btn-secondary btn-small"
+              className="btn btn-primary job-czynnosci-add-btn"
               onClick={handleAddWlasna}
               disabled={zapisywanie || !wlasna.trim() || !wlasnyCzas}
             >
-              Dodaj
+              <Icon name="plus" size={16} /> Dodaj
             </button>
           </div>
         </div>

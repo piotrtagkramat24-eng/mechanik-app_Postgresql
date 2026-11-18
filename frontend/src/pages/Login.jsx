@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import Icon from '../components/Icon.jsx';
 
 // Klucz w localStorage pod ktorym trzymane sa zapamietane dane logowania.
 // Uwaga: haslo jest zapisywane w postaci zakodowanej base64 (nie jest to
@@ -73,8 +74,8 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-page">
       <form className="login-box" onSubmit={handleSubmit}>
-        <div className="login-logo">🔧</div>
-        <h1>Warsztat</h1>
+        <div className="login-logo" aria-hidden="true"><Icon name="wrench" size={26} strokeWidth={2.2} /></div>
+        <h1>Warsz<span>tat</span></h1>
         <p className="login-subtitle">Panel zarządzania — zaloguj się</p>
 
         <label>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 
 // Przycisk + lightbox do podgladu zdjecia dolaczonego przez mechanika przy
@@ -28,7 +29,7 @@ export default function JobZdjecie({ jobId }) {
   return (
     <>
       <button type="button" className="btn btn-secondary btn-small job-zdjecie-btn" onClick={otworz}>
-        📷 Zobacz zdjęcie
+        <Icon name="camera" size={14} /> Zobacz zdjęcie
       </button>
 
       {otwarte && (
@@ -36,7 +37,7 @@ export default function JobZdjecie({ jobId }) {
           <div className="modal-box modal-box--zdjecie" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">Zdjęcie</span>
-              <button className="modal-close" onClick={() => setOtwarte(false)}>✕</button>
+              <button className="modal-close" onClick={() => setOtwarte(false)} aria-label="Zamknij"><Icon name="x" size={16} /></button>
             </div>
             <div className="modal-body">
               {ladowanie && <p className="modal-hint">Wczytywanie...</p>}

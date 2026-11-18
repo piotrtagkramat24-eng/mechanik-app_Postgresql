@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Icon from './Icon.jsx';
 import { getElapsedInfo, getCompletionInfo, formatGodziny } from '../utils/jobTimeUtils.js';
 import ElapsedBar from './ElapsedBar.jsx';
 
@@ -24,7 +25,7 @@ export default function ElapsedTimeBar({ job }) {
         <span className="completion-info-czas">Czas wykonania: {formatGodziny(completion.totalHours)}</span>
         {completion.przekroczono && (
           <span className="completion-info-warning">
-            ⚠ Przekroczono szac. czas o {formatGodziny(completion.roznicaHours)}
+            <Icon name="alert" size={13} /> Przekroczono szac. czas o {formatGodziny(completion.roznicaHours)}
           </span>
         )}
       </div>

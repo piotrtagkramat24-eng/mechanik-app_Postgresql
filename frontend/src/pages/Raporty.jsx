@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Icon from '../components/Icon.jsx';
 import {
   ResponsiveContainer, BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
@@ -352,10 +353,10 @@ export default function Raporty() {
 
       <div className="inner-tabs">
         <button className={`inner-tab ${zakladka === 'mechanicy' ? 'inner-tab--active' : ''}`} onClick={() => setZakladka('mechanicy')}>
-          🔧 Mechanicy
+          <Icon name="wrench" size={15} /> Mechanicy
         </button>
         <button className={`inner-tab ${zakladka === 'gospodarczy' ? 'inner-tab--active' : ''}`} onClick={() => setZakladka('gospodarczy')}>
-          🧹 Pracownik gospodarczy
+          <Icon name="brush" size={15} /> Pracownik gospodarczy
         </button>
       </div>
 
@@ -389,15 +390,15 @@ export default function Raporty() {
                     <AreaChart data={trendMechanicy} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="raportyTrendMechanicy" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b72f6" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#3b72f6" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="etykieta" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={24} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}h`} width={40} />
                       <Tooltip formatter={(v) => [`${v} h`, 'Czas rzeczywisty']} labelFormatter={(l) => l} />
-                      <Area type="monotone" dataKey="godziny" name="Czas rzeczywisty (h)" stroke="#3b72f6" strokeWidth={2} fill="url(#raportyTrendMechanicy)" />
+                      <Area type="monotone" dataKey="godziny" name="Czas rzeczywisty (h)" stroke="#2563eb" strokeWidth={2} fill="url(#raportyTrendMechanicy)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -424,7 +425,7 @@ export default function Raporty() {
                         <YAxis type="category" dataKey="nazwa" width={140} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => `${v} h`} />
                         <Legend />
-                        <Bar dataKey="Czas rzeczywisty (h)" fill="#3b72f6" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Czas rzeczywisty (h)" fill="#2563eb" radius={[0, 4, 4, 0]} />
                         <Bar dataKey="Czas szacowany (h)" fill="#e08c00" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -453,7 +454,7 @@ export default function Raporty() {
                         <YAxis type="category" dataKey="nazwa" width={200} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => `${v} h`} />
                         <Legend />
-                        <Bar dataKey="Śr. czas rzeczywisty (h)" fill="#3b72f6" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="Śr. czas rzeczywisty (h)" fill="#2563eb" radius={[0, 4, 4, 0]} />
                         <Bar dataKey="Śr. czas szacowany (h)" fill="#e08c00" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -513,7 +514,7 @@ export default function Raporty() {
                                           <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}h`} width={40} />
                                           <Tooltip content={<MechanikZlecenieTooltip />} />
                                           <Legend />
-                                          <Line type="monotone" dataKey="rzeczywisty" name="Czas rzeczywisty (h)" stroke="#3b72f6" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                                          <Line type="monotone" dataKey="rzeczywisty" name="Czas rzeczywisty (h)" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                                           <Line type="monotone" dataKey="szacowany" name="Czas szacowany (h)" stroke="#e08c00" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} connectNulls />
                                         </LineChart>
                                       </ResponsiveContainer>

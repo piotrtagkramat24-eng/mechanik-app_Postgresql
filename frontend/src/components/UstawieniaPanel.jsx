@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 import { startPollingWhenVisible } from '../utils/pollWhenVisible.js';
 
@@ -309,7 +310,7 @@ export default function UstawieniaPanel() {
           Wyposażenie + Inspecto oraz Mycie. Przy każdym z tych zadań zaznacz wszystkie osoby, które
           mają je wykonywać — można przypisać kilka osób jednocześnie. Każdej zaznaczonej osobie zostanie
           utworzone osobne zadanie. Jeśli nie zaznaczysz nikogo, zadanie nie zostanie utworzone. Jeśli
-          zaznaczona osoba jest akurat na urlopie (🏖️ na Tablicy mechaników), zadanie trafi zamiast niej
+          zaznaczona osoba jest akurat na urlopie (oznaczona na Tablicy mechaników), zadanie trafi zamiast niej
           do mechanika, który zakończył daną robotę.
         </p>
         <div className="ustawienia-przypisania-list">
@@ -327,7 +328,7 @@ export default function UstawieniaPanel() {
                         checked={przypisaneIds.includes(Number(u.Id))}
                         onChange={() => handleZmienPrzypisanie(p.Typ, Number(u.Id))}
                       />
-                      {u.FullName}{u.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}
+                      {u.FullName}{u.NaUrlopie ? ' (na urlopie)' : ''}
                     </label>
                   ))}
                 </div>

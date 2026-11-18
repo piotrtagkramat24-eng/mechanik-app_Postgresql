@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from './Icon.jsx';
 import JobCzynnosciList from './JobCzynnosciList.jsx';
 import { formatCzasSzacowany } from '../utils/jobTimeUtils.js';
 
@@ -35,7 +36,7 @@ export default function EditJobModal({ job: initialJob, predefiniowane, userId, 
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">Edycja zlecenia</span>
-          <button className="modal-close" onClick={onCancel}>✕</button>
+          <button className="modal-close" onClick={onCancel} aria-label="Zamknij"><Icon name="x" size={16} /></button>
         </div>
         <div className="modal-body">
           <p className="modal-car">

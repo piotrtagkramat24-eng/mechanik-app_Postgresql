@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Icon from './Icon.jsx';
 import PriorityBadge from './PriorityBadge.jsx';
 import { api } from '../api.js';
 
@@ -138,7 +139,7 @@ export default function GospodarczyTaskCard({
         </div>
       </div>
 
-      {task.Lokalizacja && <p className="gosp-card-lokalizacja">📍 {task.Lokalizacja}</p>}
+      {task.Lokalizacja && <p className="gosp-card-lokalizacja"><Icon name="map-pin" size={13} /> {task.Lokalizacja}</p>}
 
       {jestCykliczne && !jestZakonczone && (
         <div className="gosp-rej-dzisiaj">
@@ -147,7 +148,7 @@ export default function GospodarczyTaskCard({
             className="gosp-rej-dzisiaj-toggle"
             onClick={() => setRejDzisiajOtwarte((o) => !o)}
           >
-            📋 Dzisiejsze numery ({rejDzisiaj.length}) {rejDzisiajOtwarte ? '▾' : '▸'}
+            <Icon name="clipboard" size={14} /> Dzisiejsze numery ({rejDzisiaj.length}) <Icon name={rejDzisiajOtwarte ? 'chevron-down' : 'chevron-right'} size={14} />
           </button>
           {rejDzisiajOtwarte && (
             <div className="gosp-rej-dzisiaj-body">
@@ -197,7 +198,7 @@ export default function GospodarczyTaskCard({
               : wykonano ? 'chip--wykonano' : 'chip--niewykonano';
             return (
               <span key={r.Id} className={`chip ${cls}`}>
-                {znanyStatus && (wykonano ? '✓ ' : '✗ ')}
+                {znanyStatus && <Icon name={wykonano ? 'check' : 'x'} size={13} />}
                 {r.Rejestracja}
               </span>
             );
@@ -234,7 +235,7 @@ export default function GospodarczyTaskCard({
               className="btn btn-secondary btn-small"
               onClick={() => onEdit(task)}
             >
-              ✎ Edytuj
+              <Icon name="pencil" size={13} /> Edytuj
             </button>
           )}
           {onDelete && !confirmingDelete && (
@@ -242,7 +243,7 @@ export default function GospodarczyTaskCard({
               className="btn btn-secondary btn-small"
               onClick={() => setConfirmingDelete(true)}
             >
-              Usun zadanie
+              <Icon name="trash" size={13} /> Usuń zadanie
             </button>
           )}
           {onDelete && confirmingDelete && (
@@ -255,7 +256,7 @@ export default function GospodarczyTaskCard({
                   onDelete(task.Id);
                 }}
               >
-                Tak, usun
+                Tak, usuń
               </button>
               <button
                 className="btn btn-secondary btn-small"
