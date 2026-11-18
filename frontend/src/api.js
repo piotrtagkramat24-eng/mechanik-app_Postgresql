@@ -111,8 +111,8 @@ export const api = {
   // Wyposazenie+Inspecto / Mycie zostaly juz wykonane przez mechanika.
   getStatusZadanPoNaprawie: () => request('/followup/status-zlecenia'),
   getPrzypisaniaPoNaprawie: () => request('/followup/przypisania'),
-  setPrzypisaniePoNaprawie: (typ, userId) =>
-    request('/followup/przypisania', { method: 'PUT', body: JSON.stringify({ typ, userId }) }),
+  setPrzypisaniePoNaprawie: (typ, userIds) =>
+    request('/followup/przypisania', { method: 'PUT', body: JSON.stringify({ typ, userIds }) }),
   usunZadaniePoNaprawie: (id) => request(`/followup/${id}`, { method: 'DELETE' }),
   getPowiadomieniaOdbiorcy: () => request('/followup/powiadomienia'),
   setPowiadomieniaOdbiorcy: (userIds) =>

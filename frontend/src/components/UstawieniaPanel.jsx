@@ -143,16 +143,28 @@ export default function UstawieniaPanel() {
     }
   }
 
-  // Reczne przypisanie kazdego typu zadania po naprawie (Wyposazenie +
-  // Inspecto / Mycie) do jednej konkretnej osoby - patrz
-  // backend/routes/followup.js (GET/PUT /api/followup/przypisania).
+  // Przypisanie wielu osob do kazdego typu zadania po naprawie.
   async function handleZmienPrzypisanie(typ, userId) {
     setError('');
     const poprzednie = przypisania;
-    setPrzypisania(prev => prev.map(p => p.Typ === typ ? { ...p, UserId: userId ? Number(userId) : null } : p));
+    setPrzypisania(prev => prev.map(p => {
+      if (p.Typ !== typ) return p;
+      const aktualne = (p.UserIds || (p.UserId ? [p.UserId] : [])).map(Number);
+      const nowe = aktualne.includes(userId)
+        ? aktualne.filter(id => id !== userId)
+        : [...aktualne, userId];
+      return { ...p, UserIds: nowe };
+    }));
+
+    const aktualnePoZmianie = przypisania.find(p => p.Typ === typ);
+    const aktualne = (aktualnePoZmianie?.UserIds || (aktualnePoZmianie?.UserId ? [aktualnePoZmianie.UserId] : [])).map(Number);
+    const nowe = aktualne.includes(userId)
+      ? aktualne.filter(id => id !== userId)
+      : [...aktualne, userId];
+
     try {
-      await api.setPrzypisaniePoNaprawie(typ, userId ? Number(userId) : null);
-      pokazZapisano('Zapisano przypisanie.');
+      await api.setPrzypisaniePoNaprawie(typ, nowe);
+      pokazZapisano('Zapisano przypisanie wielu osób.');
     } catch (err) {
       setError(err.message);
       setPrzypisania(poprzednie);
@@ -294,28 +306,34 @@ export default function UstawieniaPanel() {
         <h2>Dalsze kroki po zakończeniu roboty (Wyposażenie + Inspecto / Mycie)</h2>
         <p className="panel-hint">
           Gdy mechanik zakończy robotę, pojazd jest mechanicznie gotowy, ale zostaje jeszcze do zrobienia:
-          Wyposażenie + Inspecto (jedno zadanie) oraz Mycie. Dla każdego z tych zadań wybierz osobę, która
-          ma je wykonywać — każde zadanie możesz przypisać do innej osoby. Jeśli dla jakiegoś zadania nie
-          wybierzesz nikogo, zadanie to nie zostanie w ogóle utworzone po zakończeniu roboty. Jeśli wybrana
-          osoba jest akurat na urlopie (🏖️ na Tablicy mechaników), zadanie trafi zamiast niej do mechanika,
-          który zakończył daną robotę.
+          Wyposażenie + Inspecto oraz Mycie. Przy każdym z tych zadań zaznacz wszystkie osoby, które
+          mają je wykonywać — można przypisać kilka osób jednocześnie. Każdej zaznaczonej osobie zostanie
+          utworzone osobne zadanie. Jeśli nie zaznaczysz nikogo, zadanie nie zostanie utworzone. Jeśli
+          zaznaczona osoba jest akurat na urlopie (🏖️ na Tablicy mechaników), zadanie trafi zamiast niej
+          do mechanika, który zakończył daną robotę.
         </p>
         <div className="ustawienia-przypisania-list">
           {mechanicyIKierownicy.length === 0 && <p>Brak kont z rolą „mechanik” lub „kierownik” w systemie.</p>}
-          {mechanicyIKierownicy.length > 0 && przypisania.map(p => (
-            <div key={p.Typ} className="ustawienia-email-row">
-              <span className="ustawienia-email-name">{p.TypLabel}</span>
-              <select
-                value={p.UserId ?? ''}
-                onChange={(e) => handleZmienPrzypisanie(p.Typ, e.target.value || null)}
-              >
-                <option value="">— nikt (nie twórz zadania) —</option>
-                {mechanicyIKierownicy.map(u => (
-                  <option key={u.Id} value={u.Id}>{u.FullName}{u.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}</option>
-                ))}
-              </select>
-            </div>
-          ))}
+          {mechanicyIKierownicy.length > 0 && przypisania.map(p => {
+            const przypisaneIds = (p.UserIds || (p.UserId ? [p.UserId] : [])).map(Number);
+            return (
+              <div key={p.Typ} className="ustawienia-typ-block">
+                <span className="ustawienia-email-name">{p.TypLabel}</span>
+                <div className="ustawienia-checkbox-list">
+                  {mechanicyIKierownicy.map(u => (
+                    <label key={u.Id} className="checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={przypisaneIds.includes(Number(u.Id))}
+                        onChange={() => handleZmienPrzypisanie(p.Typ, Number(u.Id))}
+                      />
+                      {u.FullName}{u.NaUrlopie ? ' 🏖️ (na urlopie)' : ''}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

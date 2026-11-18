@@ -14,46 +14,30 @@ const TYLKO_SUPERADMIN = requireRole('superadmin');
 const TYPY = ['wyposazenie', 'mycie'];
 const TYP_LABELS = { wyposazenie: 'Wyposażenie + Inspecto', mycie: 'Mycie' };
 
-// Zwraca aktualne reczne przypisanie typ -> osoba (patrz tabela
-// dalsze_kroki_przypisania), po jednym wierszu na kazdy z TYPY - nawet gdy
-// dla danego typu nikogo jeszcze nie przypisano (UserId wtedy = null).
+// Zwraca wszystkie reczne przypisania typ -> osoba. Jeden typ może mieć
+// kilka osob; tabela dalsze_kroki_przypisania przechowuje po jednym wierszu
+// dla każdej pary (typ, user_id).
 async function pobierzPrzypisania(pool) {
   const wynik = await pool.query(`
-    SELECT t.typ AS "Typ", u.id AS "Id", u.full_name AS "FullName", u.email AS "Email",
+    SELECT dkp.typ AS "Typ", u.id AS "Id", u.full_name AS "FullName", u.email AS "Email",
            u.na_urlopie AS "NaUrlopie"
-    FROM unnest($1::varchar[]) AS t(typ)
-    LEFT JOIN dalsze_kroki_przypisania dkp ON dkp.typ = t.typ
-    LEFT JOIN users u ON u.id = dkp.user_id
-  `, [TYPY]);
+    FROM dalsze_kroki_przypisania dkp
+    JOIN users u ON u.id = dkp.user_id
+    ORDER BY dkp.typ, u.full_name
+  `);
   return wynik.rows;
 }
 
-// Tworzy zadania "po naprawie" (Wyposazenie / Inspecto / Mycie) dla danej
-// roboty, wg recznego przypisania kazdego typu do konkretnej osoby (patrz
-// dalsze_kroki_przypisania i PUT /api/followup/przypisania). Typy bez
-// przypisanej osoby sa pomijane - nie tworzy sie dla nich zadanie.
-//
-// Urlop: jesli osoba reczne przypisana do danego typu jest oznaczona jako
-// "na urlopie" (patrz PUT /api/users/:id/urlop), zadanie NIE trafia do niej,
-// tylko do mechanika, ktory wlasnie zakonczyl te robote (job.MechanikId) -
-// pod warunkiem, ze robota w ogole miala przypisanego mechanika. Jesli robota
-// nie miala mechanika (nie powinno sie zdarzac dla zakonczonej roboty), jako
-// zabezpieczenie zadanie i tak trafia do pierwotnie przypisanej osoby, mimo
-// urlopu, zeby zadanie nie "zniknelo" bez adresata.
-//
-// Przyjmuje caly obiekt `job` (a nie tylko jobId), bo potrzebuje danych
-// mechanika, ktory zakonczyl robote (Id/FullName/Email) - patrz SELECT_JOBS
-// w backend/routes/jobs.js.
-// Zwraca liste utworzonych przypisan [{ typ, userId, fullName, email }].
+// Tworzy zadania "po naprawie" dla wszystkich przypisanych osób każdego typu.
+// Jeśli osoba jest na urlopie, zadanie trafia do mechanika, który zakończył robotę.
 async function utworzZadaniaPoNaprawie(pool, job) {
   const jobId = job.Id;
   const wykonawcaId = job.MechanikId || null;
   const przypisania = await pobierzPrzypisania(pool);
   const utworzone = [];
+  const utworzoneKlucze = new Set();
 
   for (const p of przypisania) {
-    if (!p.Id) continue; // nikt nie przypisany do tego typu - pomijamy
-
     let odbiorcaId = p.Id;
     let odbiorcaFullName = p.FullName;
     let odbiorcaEmail = p.Email;
@@ -64,10 +48,14 @@ async function utworzZadaniaPoNaprawie(pool, job) {
       odbiorcaEmail = job.MechanikEmail;
     }
 
+    const klucz = `${p.Typ}:${odbiorcaId}`;
+    if (utworzoneKlucze.has(klucz)) continue;
+
     await pool.query(
       `INSERT INTO zadania_po_naprawie (job_id, typ, user_id) VALUES ($1, $2, $3)`,
       [jobId, p.Typ, odbiorcaId]
     );
+    utworzoneKlucze.add(klucz);
     utworzone.push({ typ: p.Typ, userId: odbiorcaId, fullName: odbiorcaFullName, email: odbiorcaEmail });
   }
   return utworzone;
@@ -223,45 +211,56 @@ router.get('/powiadomienia', TYLKO_SUPERADMIN, async (req, res) => {
   }
 });
 
-// GET /api/followup/przypisania - aktualne reczne przypisanie kazdego typu
-// zadania po naprawie (Wyposazenie / Inspecto / Mycie) do konkretnej osoby.
-// Zwraca zawsze po jednym wierszu na kazdy typ z TYPY (UserId = null, gdy
-// dla danego typu jeszcze nikogo nie przypisano).
+// GET /api/followup/przypisania - aktualne przypisania wielu osób do każdego typu.
 router.get('/przypisania', TYLKO_SUPERADMIN, async (req, res) => {
   try {
     const przypisania = await pobierzPrzypisania(pool);
-    res.json(
-      przypisania.map((p) => ({
-        Typ: p.Typ,
-        TypLabel: TYP_LABELS[p.Typ] || p.Typ,
-        UserId: p.Id,
-        FullName: p.FullName,
-      }))
-    );
+    res.json(TYPY.map((typ) => {
+      const osoby = przypisania.filter((p) => p.Typ === typ);
+      return {
+        Typ: typ,
+        TypLabel: TYP_LABELS[typ] || typ,
+        UserIds: osoby.map((p) => p.Id),
+        Users: osoby.map((p) => ({ Id: p.Id, FullName: p.FullName })),
+      };
+    }));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Błąd serwera podczas pobierania przypisań zadań po naprawie.' });
   }
 });
 
-// PUT /api/followup/przypisania - body: { typ, userId }. Ustawia (lub, gdy
-// userId jest puste/null, czyści) osobę odpowiedzialną za dany typ zadania
-// po naprawie. Każdy typ ma dokładnie jedną przypisaną osobę na raz.
+// PUT /api/followup/przypisania - body: { typ, userIds: [1,2,...] }.
+// Dopuszczamy też legacy body { typ, userId }, dla kompatybilności klienta.
 router.put('/przypisania', TYLKO_SUPERADMIN, async (req, res) => {
-  const { typ, userId } = req.body || {};
+  const { typ } = req.body || {};
+  let userIds = Array.isArray(req.body?.userIds)
+    ? req.body.userIds
+    : (req.body?.userId ? [req.body.userId] : []);
+  userIds = [...new Set(userIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+
   if (!TYPY.includes(typ)) {
     return res.status(400).json({ error: 'Nieprawidłowy typ zadania po naprawie.' });
   }
+
+  const client = await pool.connect();
   try {
-    await pool.query(
-      `INSERT INTO dalsze_kroki_przypisania (typ, user_id) VALUES ($1, $2)
-       ON CONFLICT (typ) DO UPDATE SET user_id = EXCLUDED.user_id`,
-      [typ, userId || null]
-    );
+    await client.query('BEGIN');
+    await client.query('DELETE FROM dalsze_kroki_przypisania WHERE typ = $1', [typ]);
+    for (const userId of userIds) {
+      await client.query(
+        'INSERT INTO dalsze_kroki_przypisania (typ, user_id) VALUES ($1, $2)',
+        [typ, userId]
+      );
+    }
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
-    res.status(500).json({ error: 'Błąd serwera podczas zapisywania przypisania.' });
+    res.status(500).json({ error: 'Błąd serwera podczas zapisywania przypisań.' });
+  } finally {
+    client.release();
   }
 });
 

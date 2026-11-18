@@ -377,6 +377,17 @@ ALTER TABLE dalsze_kroki_przypisania
     ADD CONSTRAINT ck_dkp_typ CHECK (typ IN ('wyposazenie', 'mycie'));
 
 -- ============================================================
+-- 13e. MIGRACJA: wielu odbiorcow dla kazdego typu dalszego kroku.
+--      Tabela przestaje miec jeden wiersz na typ i przechodzi na jeden
+--      wiersz (typ, user_id), co pozwala zaznaczyc kilka osob.
+-- ============================================================
+DELETE FROM dalsze_kroki_przypisania WHERE user_id IS NULL;
+ALTER TABLE dalsze_kroki_przypisania ALTER COLUMN user_id SET NOT NULL;
+ALTER TABLE dalsze_kroki_przypisania DROP CONSTRAINT IF EXISTS dalsze_kroki_przypisania_pkey;
+ALTER TABLE dalsze_kroki_przypisania
+    ADD CONSTRAINT dalsze_kroki_przypisania_pkey PRIMARY KEY (typ, user_id);
+
+-- ============================================================
 -- 14. DANE POCZATKOWE — predefiniowane prace (93 pozycje, czasy
 --     normatywne). Wczytywane z osobnego pliku (dla czytelnosci).
 --     Uwaga: od v34 NIE seedujemy juz tu zadnych kont uzytkownikow
