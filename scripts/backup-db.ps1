@@ -40,7 +40,11 @@
 # ============================================================
 $BackupDir     = 'C:\Backups\mechanik-app-db'
 $RetentionDays = 30
-$EnvFile       = Join-Path $PSScriptRoot '..\backend\.env'
+$EnvCandidates = @(
+    (Join-Path $PSScriptRoot '..\backend\.env'),
+    (Join-Path $PSScriptRoot '..\frontend\.env')
+)
+$EnvFile       = $EnvCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 $PgDumpPath    = $null  # $null = szukaj automatycznie; albo wpisz pelna sciezke do pg_dump.exe
 
 # ============================================================
@@ -60,8 +64,9 @@ if (-not $PgDumpPath -or -not (Test-Path $PgDumpPath)) {
 # ============================================================
 # Wczytaj dane polaczenia z backend\.env
 # ============================================================
-if (-not (Test-Path $EnvFile)) {
-    Write-Error "Nie znaleziono pliku .env: $EnvFile"
+if (-not $EnvFile -or -not (Test-Path $EnvFile)) {
+    $pathsText = ($EnvCandidates | ForEach-Object { "- $_" }) -join "`n"
+    Write-Error "Nie znaleziono pliku .env. Sprawdz dane w jednym z miejsc:`n$pathsText"
     exit 1
 }
 
