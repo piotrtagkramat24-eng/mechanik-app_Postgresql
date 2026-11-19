@@ -28,35 +28,64 @@ async function pobierzPrzypisania(pool) {
   return wynik.rows;
 }
 
-// Tworzy zadania "po naprawie" dla wszystkich przypisanych osób każdego typu.
-// Jeśli osoba jest na urlopie, zadanie trafia do mechanika, który zakończył robotę.
+// Tworzy po JEDNYM zadaniu "po naprawie" dla kazdego typu, ktory ma kogos
+// przypisanego. Gdy przy typie zaznaczono kilka osob, zadanie dostaje tylko
+// jedna z nich (a nie kazda z osobna):
+//   1. pomijamy osoby na urlopie,
+//   2. wybieramy osobe, ktora ma najmniej pracy: niewykonane zadania po
+//      naprawie (wszystkie typy) + jej przydzielone/rozpoczete roboty,
+//   3. przy remisie - te, ktora najdawniej dostala zadanie tego typu
+//      (dzieki temu przy rownym obciazeniu zadania ida na zmiane).
+// Jesli wszystkie zaznaczone osoby sa na urlopie, zadanie trafia do
+// mechanika, ktory zakonczyl robote.
 async function utworzZadaniaPoNaprawie(pool, job) {
   const jobId = job.Id;
   const wykonawcaId = job.MechanikId || null;
   const przypisania = await pobierzPrzypisania(pool);
   const utworzone = [];
-  const utworzoneKlucze = new Set();
 
-  for (const p of przypisania) {
-    let odbiorcaId = p.Id;
-    let odbiorcaFullName = p.FullName;
-    let odbiorcaEmail = p.Email;
+  for (const typ of TYPY) {
+    const osoby = przypisania.filter((p) => p.Typ === typ);
+    if (osoby.length === 0) continue;
 
-    if (p.NaUrlopie && wykonawcaId) {
-      odbiorcaId = wykonawcaId;
-      odbiorcaFullName = job.MechanikFullName;
-      odbiorcaEmail = job.MechanikEmail;
+    const dostepne = osoby.filter((p) => !p.NaUrlopie);
+    let odbiorca = null;
+
+    if (dostepne.length > 0) {
+      const wybor = await pool.query(
+        `SELECT u.id AS "Id"
+         FROM users u
+         WHERE u.id = ANY($2::int[])
+         ORDER BY
+           -- obciazenie: niewykonane zadania po naprawie (dowolnego typu)
+           -- + przydzielone/rozpoczete roboty
+           (SELECT COUNT(*) FROM zadania_po_naprawie z
+             WHERE z.user_id = u.id AND z.wykonano = FALSE)
+           + (SELECT COUNT(*) FROM jobs j
+             WHERE j.mechanik_id = u.id AND j.status IN ('przydzielone', 'rozpoczete')) ASC,
+           -- remis: kto najdawniej dostal zadanie tego typu
+           (SELECT MAX(z.data_utworzenia) FROM zadania_po_naprawie z
+             WHERE z.user_id = u.id AND z.typ = $1) ASC NULLS FIRST,
+           u.id ASC
+         LIMIT 1`,
+        [typ, dostepne.map((p) => p.Id)]
+      );
+      const wybranyId = wybor.rows[0]?.Id;
+      const p = dostepne.find((o) => o.Id === wybranyId) || dostepne[0];
+      odbiorca = { id: p.Id, fullName: p.FullName, email: p.Email };
+    } else if (wykonawcaId) {
+      odbiorca = { id: wykonawcaId, fullName: job.MechanikFullName, email: job.MechanikEmail };
+    } else {
+      // Wszyscy na urlopie i brak mechanika - dajemy pierwszej zaznaczonej osobie.
+      const p = osoby[0];
+      odbiorca = { id: p.Id, fullName: p.FullName, email: p.Email };
     }
-
-    const klucz = `${p.Typ}:${odbiorcaId}`;
-    if (utworzoneKlucze.has(klucz)) continue;
 
     await pool.query(
       `INSERT INTO zadania_po_naprawie (job_id, typ, user_id) VALUES ($1, $2, $3)`,
-      [jobId, p.Typ, odbiorcaId]
+      [jobId, typ, odbiorca.id]
     );
-    utworzoneKlucze.add(klucz);
-    utworzone.push({ typ: p.Typ, userId: odbiorcaId, fullName: odbiorcaFullName, email: odbiorcaEmail });
+    utworzone.push({ typ, userId: odbiorca.id, fullName: odbiorca.fullName, email: odbiorca.email });
   }
   return utworzone;
 }

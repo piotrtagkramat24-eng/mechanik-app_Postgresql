@@ -306,11 +306,11 @@ export default function UstawieniaPanel() {
         <h2>Dalsze kroki po zakończeniu roboty (Wyposażenie + Inspecto / Mycie)</h2>
         <p className="panel-hint">
           Gdy mechanik zakończy robotę, pojazd jest mechanicznie gotowy, ale zostaje jeszcze do zrobienia:
-          Wyposażenie + Inspecto oraz Mycie. Przy każdym z tych zadań zaznacz wszystkie osoby, które
-          mają je wykonywać — można przypisać kilka osób jednocześnie. Każdej zaznaczonej osobie zostanie
-          utworzone osobne zadanie. Jeśli nie zaznaczysz nikogo, zadanie nie zostanie utworzone. Jeśli
-          zaznaczona osoba jest akurat na urlopie (🏖️ na Tablicy mechaników), zadanie trafi zamiast niej
-          do mechanika, który zakończył daną robotę.
+          Wyposażenie + Inspecto oraz Mycie. Przy każdym z tych zadań zaznacz osoby, które mogą je
+          wykonywać — można zaznaczyć kilka. Zadanie dostaje zawsze tylko JEDNA z nich: ta, która ma
+          najmniej pracy (niewykonane zadania po naprawie + przydzielone i rozpoczęte roboty; przy remisie — na zmianę). Osoby na urlopie (🏖️ na
+          Tablicy mechaników) są pomijane; jeśli wszystkie zaznaczone osoby są na urlopie, zadanie trafi
+          do mechanika, który zakończył daną robotę. Jeśli nie zaznaczysz nikogo, zadanie nie zostanie utworzone.
         </p>
         <div className="ustawienia-przypisania-list">
           {mechanicyIKierownicy.length === 0 && <p>Brak kont z rolą „mechanik” lub „kierownik” w systemie.</p>}
